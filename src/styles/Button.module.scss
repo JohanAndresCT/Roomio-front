@@ -1,0 +1,21 @@
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  background: $color-brand;
+  color: $color-brand-contrast;
+  font-weight: 600;
+}
+
+.btn:focus {
+  outline: 3px solid rgba(0,87,183,0.2);
+  outline-offset: 2px;
+}
+
+.btn--secondary {
+  background: $color-accent;
+}
