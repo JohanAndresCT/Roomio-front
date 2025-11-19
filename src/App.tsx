@@ -51,7 +51,7 @@ const App = () => {
           <Routes>
             <Route path="/" element={<Home onNavigate={handleNavigate} />} />
             <Route path="/about" element={<About onNavigate={handleNavigate} />} />
-            <Route path="/sitemap" element={<SiteMap />} />
+            <Route path="/sitemap" element={<SiteMap onNavigate={handleNavigate} />} />
             <Route path="/login" element={<Login onNavigate={handleNavigate} />} />
             <Route path="/register" element={<Register onNavigate={handleNavigate} />} />
             <Route path="/forgot-password" element={<ForgotPasswordPage onNavigate={handleNavigate} />} />

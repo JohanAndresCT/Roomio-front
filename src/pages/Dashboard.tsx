@@ -1,10 +1,12 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Video, Plus, Copy, Users, Clock, Settings, User, Sparkles, ArrowRight, Lightbulb } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Label } from '../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
+import { useAuth } from '../hooks/useAuth';
+
 
 interface DashboardProps {
   onNavigate: (page: string) => void;
