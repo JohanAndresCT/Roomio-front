@@ -1,34 +1,226 @@
-import { useState } from 'react';
-import { Camera, Save, ArrowLeft } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Camera, Save, ArrowLeft, AlertTriangle } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
+import { Dialog, DialogContent, DialogHeader, DialogFooter, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { getCurrentUser, updateUserProfile, deleteUserAccount } from '../services/authService';
+import { getAuthClient } from '../firebase/firebaseClient';
+import { EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth';
+import type { IUser } from '../interfaces/IUser';
 
 interface ProfilePageProps {
   onNavigate: (page: string) => void;
 }
 
 export function ProfilePage({ onNavigate }: ProfilePageProps) {
+  const [user, setUser] = useState<IUser | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [profileData, setProfileData] = useState({
-    name: 'Usuario Demo',
-    email: 'demo@roomio.com',
-    age: '28'
+    name: '',
+    email: '',
+    age: '',
+    photoURL: ''
   });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  
+  // Estados para el modal de eliminación
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deletePassword, setDeletePassword] = useState('');
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  const [deleteError, setDeleteError] = useState('');
+  
+  // Estados para el modal de reautenticación (cambio de email)
+  const [showReauthModal, setShowReauthModal] = useState(false);
+  const [reauthPassword, setReauthPassword] = useState('');
+  const [reauthLoading, setReauthLoading] = useState(false);
+  const [reauthError, setReauthError] = useState('');
+  const [pendingEmailChange, setPendingEmailChange] = useState('');
 
-  const handleSaveProfile = () => {
-    console.log('Perfil actualizado correctamente');
-    setIsEditing(false);
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (currentUser) {
+      setUser(currentUser);
+      setProfileData({
+        name: currentUser.displayName || '',
+        email: currentUser.email || '',
+        age: currentUser.age?.toString() || '',
+        photoURL: currentUser.photoURL || ''
+      });
+    }
+  }, []);
+
+  const handleSaveProfile = async () => {
+    setError('');
+    setSuccess('');
+    setLoading(true);
+
+    try {
+      // Validar edad si se proporciona
+      const age = profileData.age ? parseInt(profileData.age) : undefined;
+      if (profileData.age && (isNaN(age!) || age! < 1 || age! > 150)) {
+        setError('Por favor ingresa una edad válida (1-150)');
+        setLoading(false);
+        return;
+      }
+
+      // Validar email
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (profileData.email && !emailRegex.test(profileData.email)) {
+        setError('Por favor ingresa un correo electrónico válido');
+        setLoading(false);
+        return;
+      }
+
+      // Si el email cambió, solicitar reautenticación
+      if (user && profileData.email !== user.email) {
+        setPendingEmailChange(profileData.email);
+        setShowReauthModal(true);
+        setLoading(false);
+        return;
+      }
+
+      const updatedUser = await updateUserProfile(
+        profileData.name,
+        profileData.photoURL,
+        age,
+        profileData.email
+      );
+      
+      // Actualizar estado local con los datos guardados
+      setUser(updatedUser);
+      setProfileData({
+        name: updatedUser.displayName || '',
+        email: updatedUser.email || '',
+        age: updatedUser.age?.toString() || '',
+        photoURL: updatedUser.photoURL || ''
+      });
+      
+      setSuccess('Perfil actualizado correctamente');
+      setIsEditing(false);
+      
+      console.log('✅ Estado actualizado con:', updatedUser);
+    } catch (err: any) {
+      console.error('Error al actualizar perfil:', err);
+      setError(err.message || 'Error al actualizar el perfil');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelEdit = () => {
+    if (user) {
+      setProfileData({
+        name: user.displayName || '',
+        email: user.email || '',
+        age: user.age?.toString() || '',
+        photoURL: user.photoURL || ''
+      });
+    }
+    setError('');
+    setSuccess('');
     setIsEditing(false);
   };
 
   const handleImageUpload = () => {
     console.log('Función de carga de imagen disponible próximamente');
+  };
+
+  const handleDeleteAccount = async () => {
+    setDeleteError('');
+    
+    if (!deletePassword) {
+      setDeleteError('Por favor ingresa tu contraseña para confirmar');
+      return;
+    }
+
+    setDeleteLoading(true);
+
+    try {
+      await deleteUserAccount(deletePassword);
+      // Después de eliminar exitosamente, redirigir al login
+      onNavigate('login');
+    } catch (err: any) {
+      console.error('Error al eliminar cuenta:', err);
+      setDeleteError(err.message || 'Error al eliminar la cuenta');
+    } finally {
+      setDeleteLoading(false);
+    }
+  };
+
+  const handleCancelDelete = () => {
+    setShowDeleteModal(false);
+    setDeletePassword('');
+    setDeleteError('');
+  };
+
+  const handleReauthForEmail = async () => {
+    setReauthError('');
+    
+    if (!reauthPassword) {
+      setReauthError('Por favor ingresa tu contraseña');
+      return;
+    }
+
+    setReauthLoading(true);
+
+    try {
+      // Reautenticar usuario
+      const auth = getAuthClient();
+      const firebaseUser = auth.currentUser;
+      
+      if (!firebaseUser || !user?.email) {
+        throw new Error('No hay sesión activa');
+      }
+
+      const credential = EmailAuthProvider.credential(user.email, reauthPassword);
+      await reauthenticateWithCredential(firebaseUser, credential);
+      
+      // Ahora actualizar perfil con el nuevo email
+      const age = profileData.age ? parseInt(profileData.age) : undefined;
+      const updatedUser = await updateUserProfile(
+        profileData.name,
+        profileData.photoURL,
+        age,
+        pendingEmailChange
+      );
+      
+      // Actualizar estado local
+      setUser(updatedUser);
+      setProfileData({
+        name: updatedUser.displayName || '',
+        email: updatedUser.email || '',
+        age: updatedUser.age?.toString() || '',
+        photoURL: updatedUser.photoURL || ''
+      });
+      
+      setSuccess('Perfil y email actualizados correctamente');
+      setIsEditing(false);
+      setShowReauthModal(false);
+      setReauthPassword('');
+      setPendingEmailChange('');
+      
+    } catch (err: any) {
+      console.error('Error en reautenticación:', err);
+      if (err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
+        setReauthError('Contraseña incorrecta');
+      } else {
+        setReauthError(err.message || 'Error al verificar contraseña');
+      }
+    } finally {
+      setReauthLoading(false);
+    }
+  };
+
+  const handleCancelReauth = () => {
+    setShowReauthModal(false);
+    setReauthPassword('');
+    setReauthError('');
+    setPendingEmailChange('');
   };
 
   return (
@@ -60,12 +252,25 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
         <div className="space-y-6">
             {/* Profile Header Card */}
             <Card className="p-6">
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 text-green-700 rounded-lg text-sm">
+                  {success}
+                </div>
+              )}
               <div className="flex flex-col sm:flex-row items-center sm:items-center gap-6">
                 <div className="relative">
                   <Avatar className="w-24 h-24">
-                    <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt={profileData.name} />
+                    <AvatarImage 
+                      src={profileData.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${profileData.email || 'user'}`} 
+                      alt={profileData.name || 'Usuario'} 
+                    />
                     <AvatarFallback className="text-2xl">
-                      {profileData.name.charAt(0)}
+                      {profileData.name ? profileData.name.charAt(0).toUpperCase() : 'U'}
                     </AvatarFallback>
                   </Avatar>
                   <button
@@ -77,8 +282,12 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
                   </button>
                 </div>
                 <div className="flex-1 flex flex-col items-center sm:items-start text-center sm:text-left">
-                  <h2 className="text-2xl text-foreground mb-1">{profileData.name}</h2>
-                  <p className="text-muted-foreground mb-4">{profileData.email}</p>
+                  <h2 className="text-2xl text-foreground mb-1">{profileData.name || 'Usuario'}</h2>
+                  <p className="text-muted-foreground mb-1">{profileData.email}</p>
+                  {profileData.age && (
+                    <p className="text-sm text-muted-foreground mb-4">{profileData.age} años</p>
+                  )}
+                  {!profileData.age && <div className="mb-4"></div>}
                   {!isEditing && (
                     <Button onClick={() => setIsEditing(true)} variant="outline">
                       Editar perfil
@@ -118,29 +327,62 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
                     disabled={!isEditing}
                     className="bg-input-background"
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Cambiar tu correo requiere verificar tu contraseña
+                  </p>
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="age">Edad</Label>
+                  <Label htmlFor="age">Edad (opcional)</Label>
                   <Input
                     id="age"
                     type="number"
-                    min="18"
-                    max="120"
+                    min="1"
+                    max="150"
+                    placeholder="Ingresa tu edad"
                     value={profileData.age}
                     onChange={(e) => setProfileData({ ...profileData, age: e.target.value })}
                     disabled={!isEditing}
                     className="bg-input-background"
+                    aria-describedby="age-description"
                   />
+                  <p id="age-description" className="text-xs text-muted-foreground">
+                    Tu edad se guarda en Firebase y se sincroniza entre dispositivos
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="photoURL">URL de foto de perfil (opcional)</Label>
+                  <Input
+                    id="photoURL"
+                    type="url"
+                    placeholder="https://ejemplo.com/foto.jpg"
+                    value={profileData.photoURL}
+                    onChange={(e) => setProfileData({ ...profileData, photoURL: e.target.value })}
+                    disabled={!isEditing}
+                    className="bg-input-background"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Puedes dejar esto vacío para usar un avatar generado automáticamente
+                  </p>
                 </div>
 
                 {isEditing && (
                   <div className="flex flex-col sm:flex-row gap-3 pt-4 items-center justify-center sm:justify-start">
-                    <Button onClick={handleSaveProfile} className="bg-primary hover:bg-primary/90 w-full sm:w-auto">
+                    <Button 
+                      onClick={handleSaveProfile} 
+                      className="bg-primary hover:bg-primary/90 w-full sm:w-auto"
+                      disabled={loading}
+                    >
                       <Save className="w-4 h-4 mr-2" aria-hidden="true" />
-                      Guardar cambios
+                      {loading ? 'Guardando...' : 'Guardar cambios'}
                     </Button>
-                    <Button onClick={handleCancelEdit} variant="outline" className="w-full sm:w-auto">
+                    <Button 
+                      onClick={handleCancelEdit} 
+                      variant="outline" 
+                      className="w-full sm:w-auto"
+                      disabled={loading}
+                    >
                       Cancelar
                     </Button>
                   </div>
@@ -157,7 +399,12 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
                     <p className="text-foreground">Contraseña</p>
                     <p className="text-sm text-muted-foreground">Última actualización: hace 30 días</p>
                   </div>
-                  <Button variant="outline" size="sm" className="sm:flex-shrink-0">
+                  <Button 
+                    variant="outline" 
+                    size="sm" 
+                    className="sm:flex-shrink-0"
+                    onClick={() => onNavigate('reset-password')}
+                  >
                     Cambiar contraseña
                   </Button>
                 </div>
@@ -166,7 +413,12 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
                     <p className="text-foreground">Eliminar cuenta</p>
                     <p className="text-sm text-muted-foreground">Esta acción es permanente y no se puede deshacer</p>
                   </div>
-                  <Button variant="destructive" size="sm" className="sm:flex-shrink-0">
+                  <Button 
+                    variant="destructive" 
+                    size="sm" 
+                    className="sm:flex-shrink-0"
+                    onClick={() => setShowDeleteModal(true)}
+                  >
                     Eliminar cuenta
                   </Button>
                 </div>
@@ -174,6 +426,137 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
             </Card>
         </div>
       </main>
+
+      {/* Modal de confirmación para eliminar cuenta */}
+      <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
+        <DialogContent>
+          <DialogHeader>
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center">
+                <AlertTriangle className="w-6 h-6 text-red-600" aria-hidden="true" />
+              </div>
+              <DialogTitle>¿Eliminar cuenta?</DialogTitle>
+            </div>
+            <DialogDescription>
+              Esta acción es permanente y no se puede deshacer. Se eliminarán todos tus datos, 
+              incluyendo tu perfil, reuniones y configuraciones.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-4">
+            {deleteError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                {deleteError}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="delete-password">
+                Ingresa tu contraseña para confirmar
+              </Label>
+              <Input
+                id="delete-password"
+                type="password"
+                placeholder="Tu contraseña"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                disabled={deleteLoading}
+                className="bg-input-background"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Esta acción requiere tu contraseña actual para confirmar tu identidad.
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancelDelete}
+              disabled={deleteLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteAccount}
+              disabled={deleteLoading || !deletePassword}
+            >
+              {deleteLoading ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" aria-hidden="true" />
+                  Eliminando...
+                </>
+              ) : (
+                'Eliminar mi cuenta'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de reautenticación para cambio de email */}
+      <Dialog open={showReauthModal} onOpenChange={setShowReauthModal}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Verificar identidad</DialogTitle>
+            <DialogDescription>
+              Por seguridad, necesitas ingresar tu contraseña para cambiar tu correo electrónico.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="px-6 py-4">
+            {reauthError && (
+              <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                {reauthError}
+              </div>
+            )}
+
+            <div className="space-y-2">
+              <Label htmlFor="reauth-password">
+                Contraseña actual
+              </Label>
+              <Input
+                id="reauth-password"
+                type="password"
+                placeholder="Tu contraseña"
+                value={reauthPassword}
+                onChange={(e) => setReauthPassword(e.target.value)}
+                disabled={reauthLoading}
+                className="bg-input-background"
+                autoFocus
+              />
+              <p className="text-xs text-muted-foreground">
+                Cambiarás tu email de <strong>{user?.email}</strong> a <strong>{pendingEmailChange}</strong>
+              </p>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={handleCancelReauth}
+              disabled={reauthLoading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={handleReauthForEmail}
+              disabled={reauthLoading || !reauthPassword}
+            >
+              {reauthLoading ? (
+                <>
+                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" aria-hidden="true" />
+                  Verificando...
+                </>
+              ) : (
+                'Confirmar cambio'
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { initializeApp } from 'firebase/app'
 import { getAuth, GoogleAuthProvider, GithubAuthProvider } from 'firebase/auth'
+import { getFirestore } from 'firebase/firestore'
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -11,16 +12,33 @@ const firebaseConfig = {
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID
 }
 
+// Debug: Verificar configuración de Firebase
+console.log('🔥 Firebase Config:', {
+  apiKey: firebaseConfig.apiKey ? '✅ Presente' : '❌ Falta',
+  authDomain: firebaseConfig.authDomain,
+  projectId: firebaseConfig.projectId,
+  appId: firebaseConfig.appId ? '✅ Presente' : '❌ Falta'
+});
+
 // Initialize Firebase app lazily
 let app: ReturnType<typeof initializeApp> | null = null
 export function getFirebaseApp() {
-  if (!app) app = initializeApp(firebaseConfig as any)
+  if (!app) {
+    console.log('🔥 Inicializando Firebase App...');
+    app = initializeApp(firebaseConfig as any);
+    console.log('✅ Firebase App inicializada');
+  }
   return app
 }
 
 export function getAuthClient() {
   getFirebaseApp()
   return getAuth()
+}
+
+export function getFirestoreClient() {
+  getFirebaseApp()
+  return getFirestore()
 }
 
 export const googleProvider = new GoogleAuthProvider()

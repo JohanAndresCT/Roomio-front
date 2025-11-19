@@ -3,4 +3,5 @@ export interface IUser {
   email: string
   displayName?: string | null
   photoURL?: string | null
+  age?: number | null
 }

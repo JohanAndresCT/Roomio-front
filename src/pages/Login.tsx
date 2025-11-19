@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
+import { loginUser, loginWithGoogle, loginWithFacebook } from '../services/authService';
 
 interface LoginPageProps {
   onNavigate: (page: string) => void;
@@ -13,11 +14,69 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    // Simulamos el inicio de sesión exitoso
-    onNavigate('dashboard');
+    console.log('🔵 Login: Formulario enviado', { email });
+    setError('');
+    setLoading(true);
+
+    try {
+      console.log('🔵 Login: Llamando a loginUser...');
+      const user = await loginUser(email, password);
+      console.log('✅ Login exitoso:', user);
+      // Login exitoso - navegar al dashboard
+      onNavigate('dashboard');
+    } catch (err: any) {
+      console.error('❌ Error en login:', err);
+      
+      // Mensaje de error más específico
+      let errorMessage = err.message || 'Error al iniciar sesión';
+      
+      if (errorMessage.includes('No autorizado') || errorMessage.includes('401')) {
+        errorMessage = 'Email o contraseña incorrectos. Por favor verifica tus credenciales.';
+      }
+      
+      setError(errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      console.log('🔵 Login: Iniciando sesión con Google...');
+      const user = await loginWithGoogle();
+      console.log('✅ Login con Google exitoso:', user);
+      onNavigate('dashboard');
+    } catch (err: any) {
+      console.error('❌ Error en login con Google:', err);
+      setError(err.message || 'Error al iniciar sesión con Google');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      console.log('🔵 Login: Iniciando sesión con Facebook...');
+      const user = await loginWithFacebook();
+      console.log('✅ Login con Facebook exitoso:', user);
+      onNavigate('dashboard');
+    } catch (err: any) {
+      console.error('❌ Error en login con Facebook:', err);
+      setError(err.message || 'Error al iniciar sesión con Facebook');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -42,6 +101,13 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
         </div>
 
         <Card className="p-6 sm:p-8">
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -97,8 +163,8 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
               </button>
             </div>
 
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
-              Iniciar sesión
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>
+              {loading ? 'Iniciando sesión...' : 'Iniciar sesión'}
             </Button>
           </form>
 
@@ -116,6 +182,8 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
                 variant="outline"
                 className="w-full justify-center gap-2"
                 type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading}
                 aria-label="Continuar con Google"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -142,6 +210,8 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
                 variant="outline"
                 className="w-full justify-center gap-2"
                 type="button"
+                onClick={handleFacebookLogin}
+                disabled={loading}
                 aria-label="Continuar con Facebook"
               >
                 <Facebook className="w-5 h-5 text-[#1877F2]" aria-hidden="true" />

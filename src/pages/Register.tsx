@@ -4,6 +4,7 @@ import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
+import { registerUser, loginUser, loginWithGoogle, loginWithFacebook } from '../services/authService';
 
 interface RegisterPageProps {
   onNavigate: (page: string) => void;
@@ -17,6 +18,8 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [name, setName] = useState('');
   const [age, setAge] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const validatePassword = (password: string) => {
     const errors: string[] = [];
@@ -53,30 +56,90 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
 
   const currentStrength = passwordStrength(password);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     
+    // Validaciones
     if (!name || !age || !email || !password || !confirmPassword) {
-      alert('Por favor, completa todos los campos');
+      setError('Por favor, completa todos los campos');
       return;
     }
 
     // Validar requisitos de contraseña
     const passwordErrors = validatePassword(password);
     if (passwordErrors.length > 0) {
-      alert(`La contraseña debe cumplir: ${passwordErrors.join(', ')}`);
+      setError(`La contraseña debe cumplir: ${passwordErrors.join(', ')}`);
       return;
     }
 
     // Validar que las contraseñas coincidan
     if (password !== confirmPassword) {
-      alert('Las contraseñas no coinciden');
+      setError('Las contraseñas no coinciden');
       return;
     }
 
-    // Simulamos el registro exitoso
-    alert('Cuenta creada exitosamente');
-    onNavigate('dashboard');
+    console.log('🔵 Register: Formulario enviado', { email, name });
+    setLoading(true);
+
+    try {
+      console.log('🔵 Register: Llamando a registerUser...');
+      // Registrar usuario en Firebase
+      const userAge = age ? parseInt(age) : undefined;
+      const user = await registerUser(email, password, name, userAge);
+      console.log('✅ Registro exitoso:', user);
+      
+      // ⚠️ TEMPORAL: Comentado hasta que se habilite Email/Password en Firebase Console
+      // El login automático falla porque Firebase Auth Email/Password no está habilitado
+      // Descomenta estas líneas después de habilitar Email/Password:
+      /*
+      console.log('🔄 Haciendo login automático después del registro...');
+      await loginUser(email, password);
+      console.log('✅ Login automático exitoso');
+      */
+      
+      // Por ahora, navegar directamente al dashboard con el token del registro
+      onNavigate('dashboard');
+    } catch (err: any) {
+      console.error('❌ Error en registro:', err);
+      setError(err.message || 'Error al crear la cuenta');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      console.log('🔵 Register: Registrando con Google...');
+      const user = await loginWithGoogle();
+      console.log('✅ Registro con Google exitoso:', user);
+      onNavigate('dashboard');
+    } catch (err: any) {
+      console.error('❌ Error en registro con Google:', err);
+      setError(err.message || 'Error al registrarse con Google');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleFacebookLogin = async () => {
+    setError('');
+    setLoading(true);
+
+    try {
+      console.log('🔵 Register: Registrando con Facebook...');
+      const user = await loginWithFacebook();
+      console.log('✅ Registro con Facebook exitoso:', user);
+      onNavigate('dashboard');
+    } catch (err: any) {
+      console.error('❌ Error en registro con Facebook:', err);
+      setError(err.message || 'Error al registrarse con Facebook');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -101,6 +164,13 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
         </div>
 
         <Card className="p-6 sm:p-8">
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+              {error}
+            </div>
+          )}
+
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
@@ -281,8 +351,8 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
               </ul>
             </div>
 
-            <Button type="submit" className="w-full bg-primary hover:bg-primary/90">
-              Crear cuenta
+            <Button type="submit" className="w-full bg-primary hover:bg-primary/90" disabled={loading}>
+              {loading ? 'Creando cuenta...' : 'Crear cuenta'}
             </Button>
           </form>
 
@@ -300,6 +370,8 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
                 variant="outline"
                 className="w-full justify-center gap-2"
                 type="button"
+                onClick={handleGoogleLogin}
+                disabled={loading}
                 aria-label="Continuar con Google"
               >
                 <svg className="w-5 h-5" viewBox="0 0 24 24" aria-hidden="true">
@@ -326,6 +398,8 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
                 variant="outline"
                 className="w-full justify-center gap-2"
                 type="button"
+                onClick={handleFacebookLogin}
+                disabled={loading}
                 aria-label="Continuar con Facebook"
               >
                 <Facebook className="w-5 h-5 text-[#1877F2]" aria-hidden="true" />

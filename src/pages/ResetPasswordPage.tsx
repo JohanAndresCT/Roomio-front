@@ -1,24 +1,39 @@
-import { useState } from 'react';
-import { Lock, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Lock, Eye, EyeOff, CheckCircle, ArrowLeft } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
+import { getCurrentUser, updateUserPassword } from '../services/authService';
+import type { IUser } from '../interfaces/IUser';
 
 interface ResetPasswordPageProps {
   onNavigate: (page: string) => void;
 }
 
 export function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
+  const [user, setUser] = useState<IUser | null>(null);
   const [formData, setFormData] = useState({
+    currentPassword: '',
     newPassword: '',
     confirmPassword: ''
   });
   const [showPassword, setShowPassword] = useState({
+    current: false,
     new: false,
     confirm: false
   });
   const [isLoading, setIsLoading] = useState(false);
   const [passwordReset, setPasswordReset] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) {
+      onNavigate('login');
+    } else {
+      setUser(currentUser);
+    }
+  }, [onNavigate]);
 
   const validatePassword = (password: string) => {
     const errors: string[] = [];
@@ -44,33 +59,43 @@ export function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     
-    if (!formData.newPassword || !formData.confirmPassword) {
-      alert('Por favor, completa todos los campos');
+    if (!formData.currentPassword || !formData.newPassword || !formData.confirmPassword) {
+      setError('Por favor, completa todos los campos');
       return;
     }
 
     // Validar requisitos de contraseña
     const passwordErrors = validatePassword(formData.newPassword);
     if (passwordErrors.length > 0) {
-      alert(`La contraseña debe cumplir: ${passwordErrors.join(', ')}`);
+      setError(`La contraseña debe cumplir: ${passwordErrors.join(', ')}`);
       return;
     }
 
     // Validar que las contraseñas coincidan
     if (formData.newPassword !== formData.confirmPassword) {
-      alert('Las contraseñas no coinciden');
+      setError('Las contraseñas no coinciden');
+      return;
+    }
+
+    // Validar que la nueva contraseña sea diferente
+    if (formData.currentPassword === formData.newPassword) {
+      setError('La nueva contraseña debe ser diferente a la actual');
       return;
     }
 
     setIsLoading(true);
 
-    // Simulación de cambio de contraseña
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      await updateUserPassword(formData.currentPassword, formData.newPassword);
       setPasswordReset(true);
-      alert('Contraseña restablecida exitosamente');
-    }, 1500);
+    } catch (err: any) {
+      console.error('Error al cambiar contraseña:', err);
+      setError(err.message || 'Error al cambiar la contraseña');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const passwordStrength = (password: string) => {
@@ -87,37 +112,82 @@ export function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
   const currentStrength = passwordStrength(formData.newPassword);
 
   return (
-    <div className="flex items-center justify-center px-4 py-12 bg-gradient-to-br from-primary/5 via-accent/5 to-background min-h-screen">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-2 mb-4">
-            <img 
-              src="/logo.png" 
-              alt="Roomio Logo" 
-              className="w-12 h-12 object-contain"
-            />
-            <span className="text-2xl font-semibold text-foreground">Roomio</span>
+    <div className="min-h-screen bg-secondary">
+      {/* Header */}
+      <header className="bg-white border-b border-border sticky top-0 z-10">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-3 sm:py-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onNavigate('profile')}
+                aria-label="Volver al perfil"
+                className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10"
+              >
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+              </Button>
+              <div className="min-w-0">
+                <h1 className="text-base sm:text-xl text-foreground">Cambiar contraseña</h1>
+                <p className="text-xs sm:text-sm text-muted-foreground hidden sm:block">Actualiza tu contraseña de acceso</p>
+              </div>
+            </div>
           </div>
         </div>
+      </header>
 
-        <Card className="p-8">
+      <main className="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="w-full">
+
+        <Card className="p-6">
           {!passwordReset ? (
             <>
-              {/* Header */}
-              <div className="mb-8">
-                <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center mb-4">
-                  <Lock className="w-6 h-6 text-primary" aria-hidden="true" />
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                  {error}
                 </div>
-                
-                <h1 className="text-2xl text-foreground mb-2">Crear nueva contraseña</h1>
-                <p className="text-muted-foreground">
-                  Tu nueva contraseña debe ser diferente a las contraseñas utilizadas anteriormente.
+              )}
+
+              {/* Header */}
+              <div className="mb-6">
+                <h2 className="text-xl text-foreground mb-2">Cambiar contraseña</h2>
+                <p className="text-muted-foreground text-sm">
+                  Tu nueva contraseña debe ser diferente a la contraseña actual.
                 </p>
               </div>
 
               {/* Form */}
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Contraseña actual */}
+                <div className="space-y-2">
+                  <Label htmlFor="current-password">Contraseña actual</Label>
+                  <div className="relative">
+                    <input
+                      id="current-password"
+                      type={showPassword.current ? 'text' : 'password'}
+                      placeholder="••••••••"
+                      value={formData.currentPassword}
+                      onChange={(e) => setFormData({ ...formData, currentPassword: e.target.value })}
+                      className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 pr-10"
+                      required
+                      aria-required="true"
+                      autoFocus
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword({ ...showPassword, current: !showPassword.current })}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label={showPassword.current ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                    >
+                      {showPassword.current ? (
+                        <EyeOff className="w-4 h-4" aria-hidden="true" />
+                      ) : (
+                        <Eye className="w-4 h-4" aria-hidden="true" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
                 {/* Nueva contraseña */}
                 <div className="space-y-2">
                   <Label htmlFor="new-password">Nueva contraseña</Label>
@@ -131,7 +201,6 @@ export function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
                       className="flex h-10 w-full rounded-md border border-input bg-input-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 pr-10"
                       required
                       aria-required="true"
-                      autoFocus
                       aria-describedby="password-requirements"
                     />
                     <button
@@ -277,15 +346,14 @@ export function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
 
               {/* Additional info */}
               <div className="mt-6 pt-6 border-t border-border">
-                <p className="text-sm text-muted-foreground text-center">
-                  ¿Recordaste tu contraseña?{' '}
-                  <button
-                    onClick={() => onNavigate('login')}
-                    className="text-primary hover:underline focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 rounded"
-                  >
-                    Iniciar sesión
-                  </button>
-                </p>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="w-full"
+                  onClick={() => onNavigate('profile')}
+                >
+                  Cancelar
+                </Button>
               </div>
             </>
           ) : (
@@ -302,16 +370,17 @@ export function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
                 </p>
 
                 <Button
-                  onClick={() => onNavigate('login')}
+                  onClick={() => onNavigate('profile')}
                   className="w-full bg-primary hover:bg-primary/90"
                 >
-                  Ir al inicio de sesión
+                  Volver al perfil
                 </Button>
               </div>
             </>
           )}
         </Card>
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

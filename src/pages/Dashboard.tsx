@@ -5,7 +5,8 @@ import { Card } from '../components/ui/card';
 import { Label } from '../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
-import { useAuth } from '../hooks/useAuth';
+import { getCurrentUser } from '../services/authService';
+import type { IUser } from '../interfaces/IUser';
 
 
 interface DashboardProps {
@@ -30,8 +31,15 @@ interface AISummary {
 }
 
 export function Dashboard({ onNavigate }: DashboardProps) {
+  const [user, setUser] = useState<IUser | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [showAISummary, setShowAISummary] = useState(false);
+
+  useEffect(() => {
+    const currentUser = getCurrentUser();
+    setUser(currentUser);
+  }, []);
+
   const [meetings] = useState<Meeting[]>([
     {
       id: 'MTG-001',
@@ -136,14 +144,17 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 aria-label="Ver perfil"
               >
                 <Avatar className="w-8 h-8 sm:w-10 sm:h-10">
-                  <AvatarImage src="https://api.dicebear.com/7.x/avataaars/svg?seed=user" alt="Usuario" />
+                  <AvatarImage 
+                    src={user?.photoURL || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user?.email || 'user'}`} 
+                    alt={user?.displayName || 'Usuario'} 
+                  />
                   <AvatarFallback>
-                    <User className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
+                    {user?.displayName ? user.displayName.charAt(0).toUpperCase() : <User className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />}
                   </AvatarFallback>
                 </Avatar>
                 <div className="hidden md:block text-left">
-                  <p className="font-medium text-foreground text-sm">Usuario Demo</p>
-                  <p className="text-xs text-muted-foreground">demo@roomio.com</p>
+                  <p className="font-medium text-foreground text-sm">{user?.displayName || 'Usuario'}</p>
+                  <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
                 </div>
               </button>
             </div>

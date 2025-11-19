@@ -3,6 +3,7 @@ import { Mail, ArrowLeft, Send } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
+import { sendPasswordReset } from '../services/authService';
 
 interface ForgotPasswordPageProps {
   onNavigate: (page: string) => void;
@@ -12,30 +13,39 @@ export function ForgotPasswordPage({ onNavigate }: ForgotPasswordPageProps) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [emailSent, setEmailSent] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError('');
     
     if (!email) {
-      alert('Por favor, ingresa tu correo electrónico');
+      setError('Por favor, ingresa tu correo electrónico');
       return;
     }
 
     // Validación de formato de email
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      alert('Por favor, ingresa un correo electrónico válido');
+      setError('Por favor, ingresa un correo electrónico válido');
       return;
     }
 
+    console.log('🔵 ForgotPassword: Formulario enviado', { email });
     setIsLoading(true);
 
-    // Simulación de envío de email
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      console.log('🔵 ForgotPassword: Enviando email...');
+      // Enviar email de recuperación
+      await sendPasswordReset(email);
+      console.log('✅ Email de recuperación enviado');
       setEmailSent(true);
-      alert('Correo de recuperación enviado');
-    }, 1500);
+    } catch (err: any) {
+      console.error('❌ Error al enviar email:', err);
+      setError(err.message || 'Error al enviar el correo');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -56,6 +66,13 @@ export function ForgotPasswordPage({ onNavigate }: ForgotPasswordPageProps) {
         <Card className="p-8">
           {!emailSent ? (
             <>
+              {/* Error Message */}
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+
               {/* Header */}
               <div className="mb-8">
                 <button
@@ -149,24 +166,8 @@ export function ForgotPasswordPage({ onNavigate }: ForgotPasswordPageProps) {
 
                 <div className="space-y-3">
                   <Button
-                    onClick={() => onNavigate('reset-password')}
-                    className="w-full bg-primary hover:bg-primary/90"
-                  >
-                    Ir a restablecer contraseña
-                  </Button>
-                  
-                  <Button
-                    onClick={() => setEmailSent(false)}
-                    variant="outline"
-                    className="w-full"
-                  >
-                    Enviar de nuevo
-                  </Button>
-                  
-                  <Button
                     onClick={() => onNavigate('login')}
-                    variant="ghost"
-                    className="w-full"
+                    className="w-full bg-primary hover:bg-primary/90"
                   >
                     Volver al inicio de sesión
                   </Button>
