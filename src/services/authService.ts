@@ -173,6 +173,8 @@ export async function registerUser(
  */
 export async function loginWithGoogle(): Promise<IUser> {
   console.log('🔵 authService.loginWithGoogle llamado');
+  console.log('🌍 Current domain:', window.location.hostname);
+  console.log('🌍 Current origin:', window.location.origin);
   
   // Limpiar localStorage antes de hacer login
   console.log('🧹 Limpiando localStorage antes del login...');
@@ -185,6 +187,11 @@ export async function loginWithGoogle(): Promise<IUser> {
     // Configurar el provider para solicitar acceso
     provider.addScope('profile');
     provider.addScope('email');
+    
+    // Forzar selección de cuenta
+    provider.setCustomParameters({
+      prompt: 'select_account'
+    });
     
     console.log('🔥 Iniciando popup de Google...');
     
