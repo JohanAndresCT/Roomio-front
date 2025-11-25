@@ -1,4 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { DateTime } from "luxon";
 import {
   Mic,
   MicOff,
@@ -29,6 +31,20 @@ interface Participant {
 }
 
 export function VideoCallRoom({ onNavigate }: VideoCallRoomProps) {
+      // Estado para la hora actual
+  const params = useParams();
+  const meetingId = params.meetingId || 'MTG-001';
+
+  const [currentTime, setCurrentTime] = useState(() => {
+    return DateTime.now().setZone('America/Bogota').toFormat('HH:mm:ss');
+  });
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setCurrentTime(DateTime.now().setZone('America/Bogota').toFormat('HH:mm:ss'));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -73,9 +89,9 @@ export function VideoCallRoom({ onNavigate }: VideoCallRoomProps) {
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm text-white">
-            <span>MTG-001</span>
+            <span>{meetingId}</span>
             <span className="text-white/60">|</span>
-            <span>10:23</span>
+            <span>{currentTime}</span>
           </div>
           <Button variant="ghost" size="icon" className="text-white hover:bg-gray-700/50 w-8 h-8 sm:w-9 sm:h-9">
             <MoreVertical className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
@@ -234,7 +250,7 @@ export function VideoCallRoom({ onNavigate }: VideoCallRoomProps) {
       </footer>
 
       {/* Panels */}
-      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} meetingId={meetingId} />
       {/* <AccessibilityPanel isOpen={isAccessibilityOpen} onClose={() => setIsAccessibilityOpen(false)} />
       <AISummaryPanel isOpen={isAISummaryOpen} onClose={() => setIsAISummaryOpen(false)} /> */}
     </div>

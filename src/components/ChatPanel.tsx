@@ -1,4 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
+import { useAuth } from '../hooks/useAuth';
+import { useChatSocket } from '../hooks/useChatSocket';
 import { Send, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -7,44 +9,66 @@ import { Avatar, AvatarFallback } from './ui/avatar';
 
 interface Message {
   id: string;
-  user: string;
-  text: string;
-  timestamp: Date;
-  isOwn: boolean;
+  user?: string;
+  text?: string;
+  message?: string;
+  userId?: string;
+  userName?: string;
+  timestamp: Date | string;
+  isOwn?: boolean;
+  notSaved?: boolean;
 }
 
 interface ChatPanelProps {
   isOpen: boolean;
   onClose: () => void;
+  meetingId?: string;
 }
 
-export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
-  const [messages, setMessages] = useState<Message[]>([
-    {
-      id: '1',
-      user: 'Ana García',
-      text: '¡Hola a todos! ¿Están listos para comenzar?',
-      timestamp: new Date(Date.now() - 600000),
-      isOwn: false
-    },
-    {
-      id: '2',
-      user: 'Tú',
-      text: 'Sí, todo listo por aquí',
-      timestamp: new Date(Date.now() - 540000),
-      isOwn: true
-    },
-    {
-      id: '3',
-      user: 'Carlos López',
-      text: 'Perfecto, compartí el documento en el chat',
-      timestamp: new Date(Date.now() - 480000),
-      isOwn: false
-    }
-  ]);
+export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPanelProps) {
+  const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
-  const [isTyping, setIsTyping] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  // Usar el meetingId recibido por prop, si existe, si no, intentar obtenerlo de la URL
+  const meetingId = meetingIdProp
+    || (typeof window !== 'undefined' && window.location.pathname.includes('/meeting/')
+      ? (window.location.pathname.split('/meeting/')[1] || 'MTG-001')
+      : 'MTG-001');
+  const userId = user?.uid || 'anon';
+  const userName = user?.displayName || user?.email || 'Invitado';
+  const [token, setToken] = useState<string>('');
+
+  useEffect(() => {
+    async function fetchToken() {
+      if (user) {
+        // Usar Firebase Auth API directamente
+        try {
+          const { getAuth } = await import('firebase/auth');
+          const auth = getAuth();
+          const currentUser = auth.currentUser;
+          if (currentUser) {
+            const t = await currentUser.getIdToken();
+            setToken(t);
+          }
+        } catch (err) {
+          setToken('');
+        }
+      } else {
+        setToken('');
+      }
+    }
+    fetchToken();
+  }, [user]);
+
+  const chatServerUrl = import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com';
+  const {
+    messages,
+    error,
+    sendMessage,
+    connected,
+    reconnecting,
+  } = useChatSocket({ meetingId, userId, userName, token, serverUrl: chatServerUrl });
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -55,39 +79,18 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
     if (newMessage.trim()) {
-      const message: Message = {
-        id: Date.now().toString(),
-        user: 'Tú',
-        text: newMessage,
-        timestamp: new Date(),
-        isOwn: true
-      };
-      setMessages([...messages, message]);
+      sendMessage(newMessage);
       setNewMessage('');
-
-      // Simular respuesta
-      setTimeout(() => {
-        setIsTyping(true);
-        setTimeout(() => {
-          setIsTyping(false);
-          const response: Message = {
-            id: (Date.now() + 1).toString(),
-            user: 'Ana García',
-            text: 'Gracias por compartir esa información',
-            timestamp: new Date(),
-            isOwn: false
-          };
-          setMessages(prev => [...prev, response]);
-        }, 2000);
-      }, 1000);
     }
   };
 
-  const formatTime = (date: Date) => {
-    return date.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+  const formatTime = (date: Date | string) => {
+    const d = typeof date === 'string' ? new Date(date) : date;
+    return d.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
   };
 
   if (!isOpen) return null;
+  if (!user) return <div className="p-4">Inicia sesión para usar el chat.</div>;
 
   return (
     <div
@@ -108,64 +111,48 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
         </Button>
       </div>
 
-      {/* Messages */}
-      <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-        <div className="space-y-4">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex gap-3 ${message.isOwn ? 'flex-row-reverse' : ''}`}
-            >
-              {!message.isOwn && (
-                <Avatar className="w-8 h-8 flex-shrink-0">
-                  <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                    {message.user.charAt(0)}
-                  </AvatarFallback>
-                </Avatar>
-              )}
-              <div className={`flex flex-col ${message.isOwn ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
-                {!message.isOwn && (
-                  <span className="text-sm font-medium text-foreground mb-1">
-                    {message.user}
-                  </span>
+      {/* Mensajes en tiempo real */}
+      <ScrollArea className="flex-1 p-4">
+        <div className="space-y-4" ref={scrollRef}>
+          {messages.map((message) => {
+            const isOwn = message.userId === userId;
+            // Mostrar el nombre real del usuario en los mensajes propios
+            const displayName = isOwn ? userName : (message.userName || message.userId || 'Invitado');
+            return (
+              <div
+                key={message.id}
+                className={`flex gap-3 ${isOwn ? 'flex-row-reverse' : ''}`}
+              >
+                {!isOwn && (
+                  <Avatar className="w-8 h-8 flex-shrink-0">
+                    <AvatarFallback className="bg-primary/10 text-primary text-sm">
+                      {displayName?.charAt(0) || '?'}
+                    </AvatarFallback>
+                  </Avatar>
                 )}
-                <div
-                  className={`px-4 py-2 rounded-lg max-w-[85%] break-words ${
-                    message.isOwn
-                      ? 'bg-primary text-white'
-                      : 'bg-secondary text-foreground'
-                  }`}
-                >
-                  <p className="text-sm">{message.text}</p>
-                </div>
-                <span className="text-xs text-muted-foreground mt-1">
-                  {formatTime(message.timestamp)}
-                </span>
-              </div>
-            </div>
-          ))}
-
-          {isTyping && (
-            <div className="flex gap-3">
-              <Avatar className="w-8 h-8 flex-shrink-0">
-                <AvatarFallback className="bg-primary/10 text-primary text-sm">
-                  A
-                </AvatarFallback>
-              </Avatar>
-              <div className="flex flex-col items-start">
-                <span className="text-sm font-medium text-foreground mb-1">
-                  Ana García
-                </span>
-                <div className="px-4 py-2 rounded-lg bg-secondary">
-                  <div className="flex gap-1">
-                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></span>
-                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></span>
-                    <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></span>
+                <div className={`flex flex-col ${isOwn ? 'items-end' : 'items-start'} flex-1 min-w-0`}>
+                  <span className="text-sm font-medium text-foreground mb-1">
+                    {displayName}
+                  </span>
+                  <div
+                    className={`px-4 py-2 rounded-lg max-w-[85%] break-words ${
+                      isOwn
+                        ? 'bg-primary text-white'
+                        : 'bg-secondary text-foreground'
+                    }`}
+                  >
+                    <p className="text-sm">{message.text ?? ''}</p>
+                    {message.notSaved && (
+                      <span title="No guardado en Firestore" className="ml-2 text-yellow-500">⚠️</span>
+                    )}
                   </div>
+                  <span className="text-xs text-muted-foreground mt-1">
+                    {formatTime(message.timestamp)}
+                  </span>
                 </div>
               </div>
-            </div>
-          )}
+            );
+          })}
         </div>
       </ScrollArea>
 
@@ -184,12 +171,13 @@ export function ChatPanel({ isOpen, onClose }: ChatPanelProps) {
             type="submit"
             size="icon"
             className="bg-primary hover:bg-primary/90 flex-shrink-0"
-            disabled={!newMessage.trim()}
+            disabled={!newMessage.trim() || !connected || reconnecting}
             aria-label="Enviar mensaje"
           >
             <Send className="w-5 h-5" aria-hidden="true" />
           </Button>
         </div>
+        {error && <div className="text-red-500 text-xs mt-2">{error}</div>}
       </form>
     </div>
   );

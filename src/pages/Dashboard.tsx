@@ -6,6 +6,7 @@ import { Label } from '../components/ui/label';
 import { Avatar, AvatarFallback, AvatarImage } from '../components/ui/avatar';
 import { Badge } from '../components/ui/badge';
 import { getCurrentUser } from '../services/authService';
+import { meetingAPI } from '../services/api';
 import type { IUser } from '../interfaces/IUser';
 
 
@@ -34,6 +35,8 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [user, setUser] = useState<IUser | null>(null);
   const [joinCode, setJoinCode] = useState('');
   const [showAISummary, setShowAISummary] = useState(false);
+  const [creatingMeeting, setCreatingMeeting] = useState(false);
+  const [joiningMeeting, setJoiningMeeting] = useState(false);
 
   useEffect(() => {
     const currentUser = getCurrentUser();
@@ -91,14 +94,39 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     }
   ]);
 
-  const handleCreateMeeting = () => {
-    onNavigate('room');
+  const handleCreateMeeting = async () => {
+    setCreatingMeeting(true);
+    try {
+      // Tipar la respuesta para que TypeScript reconozca el campo 'id'
+      const response: import('../types').ApiResponse<import('../types').Meeting> = await meetingAPI.createMeeting({ name: 'Nueva reunión' });
+      if (response.success && response.data && response.data.id) {
+        onNavigate(`/meeting/${response.data.id}`);
+      } else {
+        alert('Error al crear la reunión');
+      }
+    } catch (err) {
+      alert('Error al crear la reunión');
+    } finally {
+      setCreatingMeeting(false);
+    }
   };
 
-  const handleJoinMeeting = (e: React.FormEvent) => {
+  const handleJoinMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (joinCode.trim()) {
-      onNavigate('room');
+    if (!joinCode.trim()) return;
+    setJoiningMeeting(true);
+    try {
+      const displayName = user?.displayName || 'Invitado';
+      const response = await meetingAPI.joinMeeting(joinCode.trim(), displayName);
+      if (response.success) {
+        onNavigate(`/meeting/${joinCode.trim()}`);
+      } else {
+        alert(response.message || 'No se pudo unir a la reunión');
+      }
+    } catch (err) {
+      alert('No se pudo unir a la reunión');
+    } finally {
+      setJoiningMeeting(false);
     }
   };
 
@@ -178,10 +206,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                 </p>
                 <Button
                   onClick={handleCreateMeeting}
+                  disabled={creatingMeeting}
                   className="w-full sm:w-auto bg-primary hover:bg-primary/90"
                 >
                   <Video className="w-4 h-4 mr-2" aria-hidden="true" />
-                  Iniciar reunión ahora
+                  {creatingMeeting ? 'Creando reunión...' : 'Iniciar reunión ahora'}
                 </Button>
               </div>
             </div>
@@ -213,9 +242,10 @@ export function Dashboard({ onNavigate }: DashboardProps) {
                   </div>
                   <Button
                     type="submit"
+                    disabled={joiningMeeting}
                     className="w-full sm:w-auto bg-primary hover:bg-primary/90"
                   >
-                    Unirse
+                    {joiningMeeting ? 'Uniendo...' : 'Unirse'}
                   </Button>
                 </form>
               </div>

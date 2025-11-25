@@ -364,7 +364,7 @@ export const meetingAPI = {
     scheduledAt?: Date;
     duration?: number;
   }) =>
-    apiClient.post('/meetings', data, true),
+    apiClient.post<import('../types').Meeting>('/meetings', data, true),
 
   /**
    * Get all meetings for current user

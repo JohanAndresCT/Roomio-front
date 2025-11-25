@@ -22,6 +22,11 @@ const App = () => {
   const location = useLocation()
 
   const handleNavigate = (page: string) => {
+    // Si la ruta es dinámica tipo /meeting/:id, navega directo
+    if (page.startsWith('/meeting/')) {
+      navigate(page);
+      return;
+    }
     const routes: Record<string, string> = {
       landing: '/',
       about: '/about',
@@ -34,14 +39,15 @@ const App = () => {
       sitemap: '/sitemap',
       room: '/room',
       profile: '/profile'
-    }
-    const path = routes[page] ?? '/'
-    navigate(path)
-  }
+    };
+    const path = routes[page] ?? '/';
+    navigate(path);
+  };
 
   // Rutas donde NO se muestra Navbar y Footer
   const hideLayoutRoutes = ['/room', '/meeting']
-  const shouldHideLayout = hideLayoutRoutes.includes(location.pathname)
+  // Permitir rutas dinámicas tipo /meeting/:meetingId
+  const shouldHideLayout = hideLayoutRoutes.some(route => location.pathname.startsWith(route))
 
   return (
     <AuthProvider>
@@ -59,6 +65,7 @@ const App = () => {
             <Route path="/dashboard" element={<Dashboard onNavigate={handleNavigate} />} />
             <Route path="/create" element={<CreateMeeting />} />
             <Route path="/join" element={<JoinMeeting />} />
+            <Route path="/meeting/:meetingId" element={<VideoCallRoom onNavigate={handleNavigate} />} />
             <Route path="/meeting" element={<MeetingLayout />} />
             <Route path="/room" element={<VideoCallRoom onNavigate={handleNavigate} />} />
             <Route path="/profile" element={<ProfilePage onNavigate={handleNavigate} />} />

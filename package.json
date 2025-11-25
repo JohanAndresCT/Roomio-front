@@ -19,14 +19,17 @@
     "firebase": "^10.0.0",
     "framer-motion": "^12.23.24",
     "lucide-react": "^0.276.0",
+    "luxon": "^3.7.2",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.20.0",
     "sass": "^1.72.0",
+    "socket.io-client": "^4.8.1",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.17",
+    "@types/luxon": "^3.7.1",
     "@types/react": "^18.0.28",
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^5.0.0",
