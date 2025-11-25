@@ -116,8 +116,7 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     if (!joinCode.trim()) return;
     setJoiningMeeting(true);
     try {
-      const displayName = user?.displayName || 'Invitado';
-      const response = await meetingAPI.joinMeeting(joinCode.trim(), displayName);
+      const response = await meetingAPI.joinMeeting(joinCode.trim());
       if (response.success) {
         onNavigate(`/meeting/${joinCode.trim()}`);
       } else {

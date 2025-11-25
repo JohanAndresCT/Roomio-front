@@ -398,8 +398,18 @@ export const meetingAPI = {
   /**
    * Join a meeting
    */
-  joinMeeting: (roomId: string, displayName: string) =>
-    apiClient.post('/meetings/join', { roomId, displayName }, true),
+  joinMeeting: async (roomId: string) => {
+    // Usar GET para verificar si la reunión existe
+    try {
+      const res = await apiClient.get(`/meetings/${roomId}`, true);
+      if (res && typeof res.data === 'object' && res.data && 'meetingId' in res.data) {
+        return { success: true, meeting: res.data };
+      }
+      return { success: false, message: 'No se encontró la reunión' };
+    } catch (err) {
+      return { success: false, message: 'No se pudo conectar con el servidor' };
+    }
+  },
 
   /**
    * Leave a meeting
