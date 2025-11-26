@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useLocation } from 'react-router-dom';
 import { DateTime } from "luxon";
 import {
@@ -76,14 +76,40 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const [isAccessibilityOpen, setIsAccessibilityOpen] = useState(false);
   const [isAISummaryOpen, setIsAISummaryOpen] = useState(false);
 
-  const [participants] = useState<Participant[]>([
-    { id: '1', name: 'Tú', isMuted: false, isVideoOff: false, isSpeaking: false },
-    { id: '2', name: 'Ana García', isMuted: false, isVideoOff: false, isSpeaking: true },
-    { id: '3', name: 'Carlos López', isMuted: true, isVideoOff: false, isSpeaking: false },
-    { id: '4', name: 'María Rodríguez', isMuted: false, isVideoOff: false, isSpeaking: false },
-    { id: '5', name: 'Juan Martínez', isMuted: false, isVideoOff: true, isSpeaking: false },
-    { id: '6', name: 'Laura Sánchez', isMuted: true, isVideoOff: false, isSpeaking: false }
-  ]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const socketRef = useRef<any>(null);
+
+  useEffect(() => {
+    // Connect to socket server
+    const { io } = require('socket.io-client');
+    const socket = io(import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com', {
+      transports: ['websocket'],
+      query: { meetingId },
+    });
+    socketRef.current = socket;
+
+    // Listen for participants updates
+    socket.on('participants', (list: any[]) => {
+      setParticipants(list.map(p => ({
+        id: p.userId,
+        name: p.userName,
+        isMuted: false,
+        isVideoOff: false,
+        isSpeaking: false,
+      })));
+      // If no participants, navigate away or clean up
+      if (list.length === 0) {
+        onNavigate('dashboard');
+      }
+    });
+
+    // Join meeting on mount
+    socket.emit('join-meeting', meetingId);
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [meetingId, onNavigate]);
 
   const handleMicToggle = () => {
     setIsMicOn(!isMicOn);

@@ -152,11 +152,19 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
       scrollToBottom();
     });
 
+
     socket.on('user-joined', ({ userId, userName: joinedUserName }) => {
-      // The backend sends { userId, userName }
       setEvents(ev => [
         ...ev,
         { type: 'user-joined', userName: joinedUserName || userId, timestamp: new Date().toISOString() },
+      ]);
+    });
+
+    // Handle user-left event
+    socket.on('user-left', ({ userId: leftUserId }) => {
+      setEvents(ev => [
+        ...ev,
+        { type: 'user-left', userName: leftUserId, timestamp: new Date().toISOString() },
       ]);
     });
 

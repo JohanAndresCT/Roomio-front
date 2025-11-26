@@ -155,6 +155,15 @@ export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPan
                 </div>
               );
             }
+            if (event.type === 'user-left' && event.userName) {
+              return (
+                <div key={`event-${idx}`} className="flex justify-center">
+                  <span className="px-4 py-1 rounded-lg bg-red-900 text-white text-sm font-semibold shadow">
+                    {event.userName} ha salido de la reunión
+                  </span>
+                </div>
+              );
+            }
             return null;
           })}
           {/* Mensajes normales */}
