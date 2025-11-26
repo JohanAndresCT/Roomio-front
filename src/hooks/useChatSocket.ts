@@ -161,10 +161,12 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
     });
 
     // Handle user-left event
-    socket.on('user-left', ({ userId: leftUserId }) => {
+    socket.on('user-left', (payload) => {
+      // Si el backend envía userName, úsalo; si no, muestra el UID
+      const name = payload.userName || payload.userId || payload.leftUserId;
       setEvents(ev => [
         ...ev,
-        { type: 'user-left', userName: leftUserId, timestamp: new Date().toISOString() },
+        { type: 'user-left', userName: name, timestamp: new Date().toISOString() },
       ]);
     });
 
