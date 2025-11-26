@@ -1,5 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
+import { useAuth } from '../hooks/useAuth';
 import { io } from 'socket.io-client';
 import { useParams, useLocation } from 'react-router-dom';
 import { DateTime } from "luxon";
@@ -45,6 +46,7 @@ interface Participant {
   isMuted: boolean;
   isVideoOff: boolean;
   isSpeaking: boolean;
+  photoURL?: string | null;
 }
 
 
@@ -59,6 +61,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const params = useParams();
   const location = useLocation();
   const meetingId = params.meetingId || 'MTG-001';
+  const { user } = useAuth();
   // Ya no se obtiene el nombre de la reunión desde la query
 
   const [currentTime, setCurrentTime] = useState(() => {
@@ -66,11 +69,11 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   });
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentTime(DateTime.now().setZone('America/Bogota').toFormat('HH:mm:ss'));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, []);
+      const interval = setInterval(() => {
+        setCurrentTime(DateTime.now().setZone('America/Bogota').toFormat('HH:mm:ss'));
+      }, 1000);
+      return () => clearInterval(interval);
+    }, []);
   const [isMicOn, setIsMicOn] = useState(true);
   const [isVideoOn, setIsVideoOn] = useState(true);
   const [isChatOpen, setIsChatOpen] = useState(false);
@@ -84,21 +87,60 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     // Connect to socket server
     const socket = io(import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com', {
       transports: ['websocket'],
-      query: { meetingId },
+      query: { meetingId, uid: user?.uid },
     });
     socketRef.current = socket;
 
+    // Mostrar notificación cuando un usuario sale
+    socket.on('user-left', (payload: { userId: string; userName: string }) => {
+      // Aquí puedes agregar la lógica para mostrar el mensaje en el chat o panel
+      // Por ejemplo, podrías usar un estado para notificaciones:
+      // setNotifications(prev => [...prev, `${payload.userName} ha salido de la reunión`]);
+      // O si tienes lógica de chat, agregarlo como mensaje del sistema
+      console.log(`${payload.userName} ha salido de la reunión`);
+    });
+
     // Listen for participants updates
     socket.on('participants', (list: any[]) => {
-      setParticipants(list.map(p => ({
+      let updatedList = list.map(p => ({
         id: p.userId,
         name: p.userName,
         isMuted: false,
         isVideoOff: false,
         isSpeaking: false,
-      })));
-      // If no participants, navigate away or clean up
-      if (list.length === 0) {
+        photoURL: p.photoURL || null,
+      }));
+      // Si el usuario actual existe y no está en la lista, lo agregamos
+      if (user) {
+        const exists = updatedList.some(p => p.id === user.uid);
+        if (!exists) {
+          updatedList = [
+            {
+              id: user.uid,
+              name: user.displayName || 'Tú',
+              isMuted: false,
+              isVideoOff: false,
+              isSpeaking: false,
+              photoURL: user.photoURL || null,
+            },
+            ...updatedList
+          ];
+        }
+      }
+      // Si no hay participantes pero existe el usuario, mostrar solo su tarjeta
+      if (updatedList.length === 0 && user) {
+        updatedList = [{
+          id: user.uid,
+          name: user.displayName || 'Tú',
+          isMuted: false,
+          isVideoOff: false,
+          isSpeaking: false,
+          photoURL: user.photoURL || null,
+        }];
+      }
+      setParticipants(updatedList);
+      // Si no hay participantes y tampoco usuario, navegar fuera
+      if (updatedList.length === 0 && !user) {
         onNavigate('dashboard');
       }
     });
@@ -162,17 +204,23 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           {participants.map((participant) => (
             <div
               key={participant.id}
-              className={`participant-card ${
-                participant.isSpeaking ? 'participant-speaking' : ''
-              }`}
+              className={`participant-card ${participant.isSpeaking ? 'participant-speaking' : ''}`}
               role="group"
               aria-label={`Video de ${participant.name}`}
             >
-              {/* Video placeholder */}
+              {/* Video placeholder o avatar */}
               {participant.isVideoOff ? (
                 <div className="participant-video-off">
                   <div className="participant-avatar">
-                    <User className="w-10 h-10 text-muted-foreground" aria-hidden="true" />
+                    {participant.photoURL ? (
+                      <img
+                        src={participant.photoURL}
+                        alt={participant.id === user?.uid ? 'Tu foto de perfil' : `Foto de ${participant.name}`}
+                        className="w-10 h-10 rounded-full object-cover"
+                      />
+                    ) : (
+                      <User className="w-10 h-10 text-muted-foreground" aria-hidden="true" />
+                    )}
                   </div>
                 </div>
               ) : (
@@ -187,7 +235,9 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               {/* Participant info */}
               <div className="participant-info">
                 <div className="flex items-center justify-between">
-                  <span className="text-white text-sm truncate">{participant.name}</span>
+                  <span className="text-white text-sm truncate">
+                    {participant.id === user?.uid ? 'Tú' : participant.name}
+                  </span>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {participant.isMuted && (
                       <div className="participant-muted-icon">
