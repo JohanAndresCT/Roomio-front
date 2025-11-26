@@ -1,6 +1,12 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+/**
+ * JoinMeeting page component.
+ * Allows the user to join a meeting by entering a meeting code.
+ * Verifies meeting existence and navigates to the video call room.
+ * @returns {JSX.Element} Section for joining a meeting.
+ */
 const JoinMeeting: React.FC = () => {
   const [meetingId, setMeetingId] = useState('');
   const [error, setError] = useState('');
@@ -10,25 +16,25 @@ const JoinMeeting: React.FC = () => {
     e.preventDefault();
     setError('');
     if (!meetingId.trim()) {
-      setError('Ingresa el código de la reunión');
+      setError('Please enter the meeting code');
       return;
     }
     try {
-      // Verificar si la reunión existe en el backend
+      // Check if the meeting exists in the backend
       const res = await fetch(`${import.meta.env.VITE_API_BASE_URL}/meetings/${meetingId}`);
       if (!res.ok) {
-        setError('No se pudo unir a la reunión ' + meetingId);
+        setError('Could not join meeting ' + meetingId);
         return;
       }
       const data = await res.json();
       if (!data || !data.meetingId) {
-        setError('No se encontró la reunión');
+        setError('Meeting not found');
         return;
       }
-      // Redirigir al video call room
+      // Redirect to video call room
       navigate(`/meeting/${meetingId}`);
     } catch (err) {
-      setError('Error al conectar con el servidor');
+      setError('Error connecting to the server');
     }
   };
 
@@ -50,4 +56,7 @@ const JoinMeeting: React.FC = () => {
   );
 };
 
+/**
+ * Exports the JoinMeeting component as default.
+ */
 export default JoinMeeting;

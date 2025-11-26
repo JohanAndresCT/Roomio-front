@@ -6,10 +6,23 @@ import { Card } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
 import { registerUser, loginUser, loginWithGoogle, loginWithFacebook } from '../services/authService';
 
+/**
+ * Props for the RegisterPage component.
+ * @typedef {Object} RegisterPageProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface RegisterPageProps {
   onNavigate: (page: string) => void;
 }
 
+
+/**
+ * Register page component.
+ * Handles user registration, password validation, and OAuth sign-up.
+ * Displays error messages and navigation options.
+ * @param {RegisterPageProps} props - Component props.
+ * @returns {JSX.Element} Register page layout.
+ */
 export function RegisterPage({ onNavigate }: RegisterPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
@@ -432,4 +445,7 @@ export function RegisterPage({ onNavigate }: RegisterPageProps) {
   );
 }
 
+/**
+ * Exports the RegisterPage component as default.
+ */
 export default RegisterPage;

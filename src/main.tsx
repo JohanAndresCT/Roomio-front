@@ -5,6 +5,10 @@ import App from './App'
 import { AuthProvider } from './hooks/useAuth'
 import './styles/global.scss'
 
+/**
+ * Main entry point for Roomio frontend.
+ * Renders the App component inside BrowserRouter and AuthProvider.
+ */
 createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <BrowserRouter>

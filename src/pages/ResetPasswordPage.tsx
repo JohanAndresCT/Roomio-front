@@ -6,10 +6,23 @@ import { Card } from '../components/ui/card';
 import { getCurrentUser, updateUserPassword } from '../services/authService';
 import type { IUser } from '../interfaces/IUser';
 
+/**
+ * Props for the ResetPasswordPage component.
+ * @typedef {Object} ResetPasswordPageProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface ResetPasswordPageProps {
   onNavigate: (page: string) => void;
 }
 
+
+/**
+ * ResetPasswordPage component.
+ * Allows the user to change their password with validation and feedback.
+ * Displays error messages and navigation options.
+ * @param {ResetPasswordPageProps} props - Component props.
+ * @returns {JSX.Element} Password reset page layout.
+ */
 export function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
   const [user, setUser] = useState<IUser | null>(null);
   const [formData, setFormData] = useState({
@@ -385,4 +398,7 @@ export function ResetPasswordPage({ onNavigate }: ResetPasswordPageProps) {
   );
 }
 
+/**
+ * Exports the ResetPasswordPage component as default.
+ */
 export default ResetPasswordPage;

@@ -6,10 +6,33 @@ import { Card } from '../components/ui/card';
 import { Separator } from '../components/ui/separator';
 import { loginUser, loginWithGoogle, loginWithFacebook } from '../services/authService';
 
+/**
+ * Props for the LoginPage component.
+ * @typedef {Object} LoginPageProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
+/**
+ * Props for the LoginPage component.
+ * @typedef {Object} LoginPageProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
+/**
+ * Props for the LoginPage component.
+ * @typedef {Object} LoginPageProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface LoginPageProps {
   onNavigate: (page: string) => void;
 }
 
+
+/**
+ * Login page component.
+ * Handles user authentication via email/password, Google, and Facebook.
+ * Displays error messages and navigation options.
+ * @param {LoginPageProps} props - Component props.
+ * @returns {JSX.Element} Login page layout.
+ */
 export function LoginPage({ onNavigate }: LoginPageProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [email, setEmail] = useState('');
@@ -244,4 +267,7 @@ export function LoginPage({ onNavigate }: LoginPageProps) {
   );
 }
 
+/**
+ * Exports the LoginPage component as default.
+ */
 export default LoginPage;

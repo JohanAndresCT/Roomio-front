@@ -7,6 +7,19 @@ import { Input } from './ui/input';
 import { ScrollArea } from './ui/scroll-area';
 import { Avatar, AvatarFallback } from './ui/avatar';
 
+/**
+ * Represents a chat message in the ChatPanel.
+ * @typedef {Object} Message
+ * @property {string} id - Unique message ID.
+ * @property {string} [user] - User identifier.
+ * @property {string} [text] - Message text content.
+ * @property {string} [message] - Message content (alternative).
+ * @property {string} [userId] - User ID of the sender.
+ * @property {string} [userName] - User name of the sender.
+ * @property {Date | string} timestamp - Message timestamp.
+ * @property {boolean} [isOwn] - Whether the message is sent by the current user.
+ * @property {boolean} [notSaved] - Whether the message is not yet saved on the server.
+ */
 interface Message {
   id: string;
   user?: string;
@@ -19,12 +32,28 @@ interface Message {
   notSaved?: boolean;
 }
 
+
+/**
+ * Props for the ChatPanel component.
+ * @typedef {Object} ChatPanelProps
+ * @property {boolean} isOpen - Whether the chat panel is open.
+ * @property {() => void} onClose - Function to close the chat panel.
+ * @property {string} [meetingId] - Meeting ID for the chat session.
+ */
 interface ChatPanelProps {
   isOpen: boolean;
   onClose: () => void;
   meetingId?: string;
 }
 
+
+/**
+ * ChatPanel component for Roomio meetings.
+ * Displays real-time chat messages and system events for a meeting.
+ * Handles message sending and user authentication.
+ * @param {ChatPanelProps} props - Component props.
+ * @returns {JSX.Element | null} Chat panel layout or null if not open.
+ */
 export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPanelProps) {
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
@@ -68,6 +97,7 @@ export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPan
     sendMessage,
     connected,
     reconnecting,
+    events,
   } = useChatSocket({ meetingId, userId, userName, token, serverUrl: chatServerUrl });
 
   useEffect(() => {
@@ -111,12 +141,25 @@ export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPan
         </Button>
       </div>
 
-      {/* Mensajes en tiempo real */}
+      {/* Mensajes en tiempo real + eventos */}
       <ScrollArea className="flex-1 p-4">
         <div className="space-y-4" ref={scrollRef}>
+          {/* Eventos de sistema (user-joined) */}
+          {events && events.map((event, idx) => {
+            if (event.type === 'user-joined' && event.userName) {
+              return (
+                <div key={`event-${idx}`} className="flex justify-center">
+                  <span className="px-4 py-1 rounded-lg bg-blue-900 text-white text-sm font-semibold shadow">
+                    {event.userName} ha entrado a la reunión
+                  </span>
+                </div>
+              );
+            }
+            return null;
+          })}
+          {/* Mensajes normales */}
           {messages.map((message) => {
             const isOwn = message.userId === userId;
-            // Mostrar el nombre real del usuario en los mensajes propios
             const displayName = isOwn ? userName : (message.userName || message.userId || 'Invitado');
             return (
               <div

@@ -17,6 +17,12 @@ import Footer from '@components/Footer'
 import { AuthProvider } from '@hooks/useAuth'
 import { useNavigate, useLocation } from 'react-router-dom'
 
+/**
+ * Main App component for Roomio.
+ * Handles routing, layout visibility, and navigation logic.
+ * Wraps the application in AuthProvider and renders Navbar, Footer, and page routes.
+ * @returns {JSX.Element} Main application layout.
+ */
 const App = () => {
   const navigate = useNavigate()
   const location = useLocation()
@@ -77,4 +83,7 @@ const App = () => {
   )
 }
 
+/**
+ * Exports the App component as default.
+ */
 export default App

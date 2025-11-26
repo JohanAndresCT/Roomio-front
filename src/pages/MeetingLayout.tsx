@@ -1,3 +1,8 @@
+/**
+ * MeetingLayout page component.
+ * Displays the layout for a meeting, including placeholders for video, participants, and chat.
+ * @returns {JSX.Element} Meeting layout section.
+ */
 const MeetingLayout: React.FC = () => {
   return (
     <section aria-labelledby="meeting-heading" style={{display: 'grid', gap: 16}}>
@@ -13,4 +18,7 @@ const MeetingLayout: React.FC = () => {
   )
 }
 
+/**
+ * Exports the MeetingLayout component as default.
+ */
 export default MeetingLayout

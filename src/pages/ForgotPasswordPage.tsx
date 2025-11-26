@@ -5,10 +5,21 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { sendPasswordReset } from '../services/authService';
 
+/**
+ * Props for the ForgotPasswordPage component.
+ * @typedef {Object} ForgotPasswordPageProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface ForgotPasswordPageProps {
   onNavigate: (page: string) => void;
 }
 
+/**
+ * Component for the password recovery view.
+ * Allows the user to request instructions to reset their password.
+ * @param {ForgotPasswordPageProps} props - Component props.
+ * @returns {JSX.Element} Password recovery page.
+ */
 export function ForgotPasswordPage({ onNavigate }: ForgotPasswordPageProps) {
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -181,4 +192,7 @@ export function ForgotPasswordPage({ onNavigate }: ForgotPasswordPageProps) {
   );
 }
 
+/**
+ * Exports the ForgotPasswordPage component as default.
+ */
 export default ForgotPasswordPage;

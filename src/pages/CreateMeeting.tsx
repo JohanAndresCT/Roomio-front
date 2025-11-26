@@ -1,3 +1,8 @@
+/**
+ * Component for the meeting creation view.
+ * Currently only displays the layout and a placeholder for the form.
+ * @returns {JSX.Element} Section of the page for creating a meeting.
+ */
 const CreateMeeting: React.FC = () => {
   return (
     <section aria-labelledby="create-heading">
@@ -7,4 +12,7 @@ const CreateMeeting: React.FC = () => {
   )
 }
 
+/**
+ * Exports the CreateMeeting component as default.
+ */
 export default CreateMeeting

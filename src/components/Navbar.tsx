@@ -4,6 +4,11 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 
+/**
+ * Navbar component for Roomio.
+ * Displays navigation links, handles authentication state, and supports mobile/desktop layouts.
+ * @returns {JSX.Element} Navigation bar layout.
+ */
 function Navbar() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
@@ -193,4 +198,7 @@ function Navbar() {
   );
 }
 
+/**
+ * Exports the Navbar component as default.
+ */
 export default Navbar;

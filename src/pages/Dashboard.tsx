@@ -10,10 +10,22 @@ import { meetingAPI } from '../services/api';
 import type { IUser } from '../interfaces/IUser';
 
 
+/**
+ * Props for the Dashboard component.
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface DashboardProps {
   onNavigate: (page: string) => void;
 }
 
+/**
+ * Represents a meeting in the dashboard.
+ * @property {string} id - Unique meeting ID.
+ * @property {string} title - Meeting title.
+ * @property {number} participants - Number of participants.
+ * @property {string} date - Meeting date and time.
+ * @property {'active'|'scheduled'|'completed'} status - Meeting status.
+ */
 interface Meeting {
   id: string;
   title: string;
@@ -22,6 +34,15 @@ interface Meeting {
   status: 'active' | 'scheduled' | 'completed';
 }
 
+/**
+ * AI-generated summary for a meeting.
+ * @property {string} meetingId - Meeting ID.
+ * @property {string} meetingTitle - Meeting title.
+ * @property {string} date - Summary date.
+ * @property {string[]} keyPoints - Key points discussed.
+ * @property {number} decisions - Number of decisions made.
+ * @property {number} actions - Number of actions defined.
+ */
 interface AISummary {
   meetingId: string;
   meetingTitle: string;
@@ -31,6 +52,11 @@ interface AISummary {
   actions: number;
 }
 
+/**
+ * Main dashboard component.
+ * Shows meetings, allows creating/joining, and displays AI summaries.
+ * @param {DashboardProps} props
+ */
 export function Dashboard({ onNavigate }: DashboardProps) {
   const [user, setUser] = useState<IUser | null>(null);
   const [joinCode, setJoinCode] = useState('');
@@ -94,11 +120,15 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     }
   ]);
 
+  /**
+   * Creates a new meeting and navigates to the room.
+   * @returns {Promise<void>}
+   */
   const handleCreateMeeting = async () => {
     setCreatingMeeting(true);
     try {
-      // Tipar la respuesta para que TypeScript reconozca el campo 'id'
-      const response: import('../types').ApiResponse<import('../types').Meeting> = await meetingAPI.createMeeting({ name: 'Nueva reunión' });
+      // Backend no requiere 'name', solo se asigna el id automáticamente
+      const response: import('../types').ApiResponse<import('../types').Meeting> = await meetingAPI.createMeeting({ name: "" });
       if (response.success && response.data && response.data.id) {
         onNavigate(`/meeting/${response.data.id}`);
       } else {
@@ -111,6 +141,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     }
   };
 
+  /**
+   * Allows joining an existing meeting using the code.
+   * @param {React.FormEvent} e - Form event.
+   * @returns {Promise<void>}
+   */
   const handleJoinMeeting = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!joinCode.trim()) return;
@@ -129,6 +164,11 @@ export function Dashboard({ onNavigate }: DashboardProps) {
     }
   };
 
+  /**
+   * Returns the visual badge for the meeting status.
+   * @param {'active'|'scheduled'|'completed'} status - Meeting status.
+   * @returns {JSX.Element}
+   */
   const getStatusBadge = (status: Meeting['status']) => {
     switch (status) {
       case 'active':

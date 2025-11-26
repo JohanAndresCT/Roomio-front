@@ -427,7 +427,7 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
         </div>
       </main>
 
-      {/* Modal de confirmación para eliminar cuenta */}
+      {/* Modal de confirmación para eliminar cuenta (sin contraseña) */}
       <Dialog open={showDeleteModal} onOpenChange={setShowDeleteModal}>
         <DialogContent>
           <DialogHeader>
@@ -438,60 +438,43 @@ export function ProfilePage({ onNavigate }: ProfilePageProps) {
               <DialogTitle>¿Eliminar cuenta?</DialogTitle>
             </div>
             <DialogDescription>
-              Esta acción es permanente y no se puede deshacer. Se eliminarán todos tus datos, 
-              incluyendo tu perfil, reuniones y configuraciones.
+              Esta acción es permanente y no se puede deshacer. Se eliminarán todos tus datos, incluyendo tu perfil, reuniones y configuraciones.
             </DialogDescription>
           </DialogHeader>
-
           <div className="px-6 py-4">
             {deleteError && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
                 {deleteError}
               </div>
             )}
-
-            <div className="space-y-2">
-              <Label htmlFor="delete-password">
-                Ingresa tu contraseña para confirmar
-              </Label>
-              <Input
-                id="delete-password"
-                type="password"
-                placeholder="Tu contraseña"
-                value={deletePassword}
-                onChange={(e) => setDeletePassword(e.target.value)}
-                disabled={deleteLoading}
-                className="bg-input-background"
-                autoFocus
-              />
-              <p className="text-xs text-muted-foreground">
-                Esta acción requiere tu contraseña actual para confirmar tu identidad.
-              </p>
-            </div>
+            <p className="text-base text-center text-muted-foreground">¿Estás seguro que deseas eliminar tu cuenta?</p>
           </div>
-
           <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={handleCancelDelete}
-              disabled={deleteLoading}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={handleDeleteAccount}
-              disabled={deleteLoading || !deletePassword}
-            >
-              {deleteLoading ? (
-                <>
-                  <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" aria-hidden="true" />
-                  Eliminando...
-                </>
-              ) : (
-                'Eliminar mi cuenta'
-              )}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-3 w-full justify-center items-center">
+              <Button
+                variant="outline"
+                onClick={handleCancelDelete}
+                disabled={deleteLoading}
+                className="w-full sm:w-auto"
+              >
+                No, cancelar
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleDeleteAccount}
+                disabled={deleteLoading}
+                className="w-full sm:w-auto"
+              >
+                {deleteLoading ? (
+                  <>
+                    <span className="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" aria-hidden="true" />
+                    Eliminando...
+                  </>
+                ) : (
+                  'Sí, eliminar mi cuenta'
+                )}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

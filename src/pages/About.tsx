@@ -4,11 +4,20 @@ import { ImageWithFallback } from '../components/figma/ImageWithFallback';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useState, useEffect } from 'react';
 
+/**
+ * Props for the AboutPage component.
+ * @typedef {Object} AboutPageProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface AboutPageProps {
   onNavigate: (page: string) => void;
 }
 
-// Tech Logo Component
+/**
+ * Component to display a technology logo.
+ * @param {{ name: string; logoSrc: string }} props - Component props.
+ * @returns {JSX.Element} JSX element with the technology logo and name.
+ */
 function TechLogo({ name, logoSrc }: { name: string; logoSrc: string }) {
   return (
     <div className="flex-shrink-0 mx-2 sm:mx-4 lg:mx-6 px-4 sm:px-6 lg:px-8 py-3 sm:py-4 lg:py-5 bg-white/10 backdrop-blur-sm rounded-lg sm:rounded-xl border border-white/20 hover:bg-white/20 transition-all duration-300">
@@ -21,6 +30,12 @@ function TechLogo({ name, logoSrc }: { name: string; logoSrc: string }) {
   );
 }
 
+/**
+ * Main view for the "About Roomio" page.
+ * Includes mission, values, technologies, and team sections.
+ * @param {AboutPageProps} props - Component props.
+ * @returns {JSX.Element} JSX element for the About page.
+ */
 export function AboutPage({ onNavigate }: AboutPageProps) {
   const silhouettes = [
     '/people/1.png',
@@ -334,4 +349,7 @@ export function AboutPage({ onNavigate }: AboutPageProps) {
   );
 }
 
+/**
+ * Exports the AboutPage component as default.
+ */
 export default AboutPage;

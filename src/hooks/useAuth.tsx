@@ -12,6 +12,20 @@ import {
   deleteUser as firebaseDeleteUser
 } from 'firebase/auth'
 
+/**
+ * Authentication context interface for Roomio.
+ * @typedef {Object} IAuthContext
+ * @property {IUser | null} user - Current authenticated user or null.
+ * @property {boolean} loading - Whether authentication state is loading.
+ * @property {(email: string, password: string) => Promise<void>} register - Register a new user.
+ * @property {(email: string, password: string) => Promise<void>} login - Login with email and password.
+ * @property {() => Promise<void>} logout - Logout the current user.
+ * @property {() => Promise<void>} loginWithGoogle - Login with Google provider.
+ * @property {() => Promise<void>} loginWithGitHub - Login with GitHub provider.
+ * @property {(email: string) => Promise<void>} resetPassword - Send password reset email.
+ * @property {(data: { displayName?: string; photoURL?: string }) => Promise<void>} updateProfile - Update user profile.
+ * @property {() => Promise<void>} deleteAccount - Delete the current user account.
+ */
 interface IAuthContext {
   user: IUser | null
   loading: boolean
@@ -25,8 +39,15 @@ interface IAuthContext {
   deleteAccount: () => Promise<void>
 }
 
+
 const AuthContext = createContext<IAuthContext | undefined>(undefined)
 
+/**
+ * AuthProvider component for Roomio.
+ * Provides authentication context to child components.
+ * @param {{ children: React.ReactNode }} props - Provider props.
+ * @returns {JSX.Element} Auth context provider.
+ */
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<IUser | null>(null)
   const [loading, setLoading] = useState(true)
@@ -78,6 +99,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   )
 }
 
+/**
+ * Custom hook to access authentication context.
+ * Must be used within AuthProvider.
+ * @returns {IAuthContext} Authentication context value.
+ */
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')

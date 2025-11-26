@@ -129,6 +129,7 @@ export interface MeetingParticipant {
  */
 export interface MeetingCreateData {
   name: string;
+  title?: string;
   description?: string;
   scheduledAt?: Date | string;
   duration?: number;

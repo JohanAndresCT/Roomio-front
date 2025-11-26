@@ -2,10 +2,22 @@ import { Video, Home, Info, UserCircle, Phone, Map, Shield } from 'lucide-react'
 import { Card } from '../components/ui/card';
 import { motion } from 'framer-motion';
 
+/**
+ * Props for the SiteMapPage component.
+ * @typedef {Object} SiteMapPageProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface SiteMapPageProps {
   onNavigate: (page: string) => void;
 }
 
+
+/**
+ * SiteMapPage component.
+ * Displays the full navigation structure of Roomio, including categories and pages.
+ * @param {SiteMapPageProps} props - Component props.
+ * @returns {JSX.Element} Site map page layout.
+ */
 export function SiteMapPage({ onNavigate }: SiteMapPageProps) {
   const siteStructure = [
     {
@@ -282,4 +294,7 @@ export function SiteMapPage({ onNavigate }: SiteMapPageProps) {
   );
 }
 
+/**
+ * Exports the SiteMapPage component as default.
+ */
 export default SiteMapPage;

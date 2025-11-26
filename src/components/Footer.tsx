@@ -1,10 +1,22 @@
 import React from 'react'
 import { Video, Twitter, Github, Linkedin, Mail } from 'lucide-react'
 
+/**
+ * Props for the Footer component.
+ * @typedef {Object} FooterProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface FooterProps {
   onNavigate: (page: string) => void
 }
 
+
+/**
+ * Footer component for Roomio.
+ * Displays brand, navigation, legal, and social links.
+ * @param {FooterProps} props - Component props.
+ * @returns {JSX.Element} Footer layout.
+ */
 export function Footer({ onNavigate }: FooterProps) {
   return (
     <footer className="bg-secondary border-t border-border mt-auto" role="contentinfo">
@@ -83,4 +95,7 @@ export function Footer({ onNavigate }: FooterProps) {
   )
 }
 
+/**
+ * Exports the Footer component as default.
+ */
 export default Footer

@@ -1,5 +1,6 @@
+
 import { useState, useEffect } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { DateTime } from "luxon";
 import {
   Mic,
@@ -18,10 +19,25 @@ import { Button } from '../components/ui/button';
 import { Badge } from '../components/ui/badge';
 import { ChatPanel } from '../components/ChatPanel';
 
+/**
+ * Props for the VideoCallRoom component.
+ * @typedef {Object} VideoCallRoomProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface VideoCallRoomProps {
   onNavigate: (page: string) => void;
 }
 
+
+/**
+ * Represents a meeting participant.
+ * @typedef {Object} Participant
+ * @property {string} id - Unique participant ID.
+ * @property {string} name - Participant name.
+ * @property {boolean} isMuted - Whether the participant's mic is muted.
+ * @property {boolean} isVideoOff - Whether the participant's video is off.
+ * @property {boolean} isSpeaking - Whether the participant is currently speaking.
+ */
 interface Participant {
   id: string;
   name: string;
@@ -30,10 +46,19 @@ interface Participant {
   isSpeaking: boolean;
 }
 
-export function VideoCallRoom({ onNavigate }: VideoCallRoomProps) {
-      // Estado para la hora actual
+
+/**
+ * VideoCallRoom component.
+ * Displays the video call interface, participants, controls, and chat panel.
+ * Handles mic, video, chat, accessibility, and AI summary toggles.
+ * @param {VideoCallRoomProps} props - Component props.
+ * @returns {JSX.Element} Video call room layout.
+ */
+const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const params = useParams();
+  const location = useLocation();
   const meetingId = params.meetingId || 'MTG-001';
+  // Ya no se obtiene el nombre de la reunión desde la query
 
   const [currentTime, setCurrentTime] = useState(() => {
     return DateTime.now().setZone('America/Bogota').toFormat('HH:mm:ss');
@@ -86,6 +111,7 @@ export function VideoCallRoom({ onNavigate }: VideoCallRoomProps) {
             <Users className="w-3 h-3 mr-1" aria-hidden="true" />
             {participants.length}
           </Badge>
+          {/* Ya no se muestra el nombre de la reunión */}
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm text-white">
@@ -255,6 +281,9 @@ export function VideoCallRoom({ onNavigate }: VideoCallRoomProps) {
       <AISummaryPanel isOpen={isAISummaryOpen} onClose={() => setIsAISummaryOpen(false)} /> */}
     </div>
   );
-}
+};
 
+/**
+ * Exports the VideoCallRoom component as default.
+ */
 export default VideoCallRoom;

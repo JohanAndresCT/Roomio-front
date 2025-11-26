@@ -1,12 +1,32 @@
 import { Video } from 'lucide-react';
 import { Button } from '../components/ui/button';
 import { motion } from 'framer-motion';
+import { useAuth } from '../hooks/useAuth';
 
+/**
+ * Props for the Home component.
+ * @typedef {Object} HomeProps
+ * @property {(page: string) => void} onNavigate - Function to navigate between pages.
+ */
 interface HomeProps {
   onNavigate: (page: string) => void;
 }
 
+/**
+ * Main Home page component.
+ * Displays the hero section, features, and call-to-action for Roomio.
+ * @param {HomeProps} props - Component props.
+ * @returns {JSX.Element} Home page layout.
+ */
 const Home: React.FC<HomeProps> = ({ onNavigate }) => {
+  const { user } = useAuth();
+  const handleStartMeeting = () => {
+    if (user) {
+      onNavigate('dashboard');
+    } else {
+      onNavigate('login');
+    }
+  };
   return (
     <div className="min-h-screen" style={{ background: 'linear-gradient(135deg, rgba(229, 231, 255, 0.3) 0%, rgba(237, 233, 254, 0.2) 50%, rgba(255, 255, 255, 1) 100%)' }}>
       {/* Hero Section */}
@@ -37,7 +57,7 @@ const Home: React.FC<HomeProps> = ({ onNavigate }) => {
               {/* Buttons */}
               <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 pt-2 sm:pt-4">
                 <button
-                  onClick={() => onNavigate('dashboard')}
+                  onClick={handleStartMeeting}
                   className="inline-flex items-center justify-center bg-[#5B8DEF] hover:bg-[#4A7FDE] text-white px-6 sm:px-8 lg:px-9 py-3 sm:py-3.5 lg:py-4 rounded-lg font-medium text-base sm:text-lg transition-colors shadow-sm w-full sm:w-auto"
                   aria-label="Iniciar reunión ahora"
                 >
@@ -243,5 +263,8 @@ const Home: React.FC<HomeProps> = ({ onNavigate }) => {
   );
 }
 
+/**
+ * Exports the Home component as default.
+ */
 export default Home;
 

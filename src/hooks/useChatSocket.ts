@@ -1,6 +1,17 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
+/**
+ * Represents a chat message in the meeting chat.
+ * @typedef {Object} ChatMessage
+ * @property {string} id - Unique message ID.
+ * @property {string} userId - Sender user ID.
+ * @property {string} userName - Sender user name.
+ * @property {string} text - Message text content.
+ * @property {string} timestamp - ISO timestamp of the message.
+ * @property {boolean} [system] - Whether the message is a system message.
+ * @property {boolean} [notSaved] - Whether the message is not yet saved on the server.
+ */
 export interface ChatMessage {
   id: string;
   userId: string;
@@ -11,6 +22,15 @@ export interface ChatMessage {
   notSaved?: boolean;
 }
 
+
+/**
+ * Represents a chat event (user joined, left, or system event).
+ * @typedef {Object} ChatEvent
+ * @property {'user-joined' | 'user-left' | 'system'} type - Type of event.
+ * @property {string} [userName] - Name of the user involved in the event.
+ * @property {string} [message] - Event message.
+ * @property {string} timestamp - ISO timestamp of the event.
+ */
 export interface ChatEvent {
   type: 'user-joined' | 'user-left' | 'system';
   userName?: string;
@@ -18,6 +38,16 @@ export interface ChatEvent {
   timestamp: string;
 }
 
+
+/**
+ * Options for initializing the useChatSocket hook.
+ * @typedef {Object} UseChatSocketOptions
+ * @property {string} meetingId - Meeting ID to join.
+ * @property {string} userId - User ID of the participant.
+ * @property {string} userName - User name of the participant.
+ * @property {string} token - Authentication token for the chat server.
+ * @property {string} [serverUrl] - Chat server URL (default provided).
+ */
 interface UseChatSocketOptions {
   meetingId: string;
   userId: string;
@@ -26,6 +56,13 @@ interface UseChatSocketOptions {
   serverUrl?: string;
 }
 
+
+/**
+ * Custom React hook for managing chat socket connection in a meeting.
+ * Handles connection, reconnection, message sending, and event handling.
+ * @param {UseChatSocketOptions} options - Options for chat socket connection.
+ * @returns {Object} Chat state and actions (messages, events, sendMessage, etc).
+ */
 export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 'https://roomio-chat-service.onrender.com' }: UseChatSocketOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [events, setEvents] = useState<ChatEvent[]>([]);
@@ -115,14 +152,25 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
       scrollToBottom();
     });
 
-    socket.on('user-joined', ({ userId }) => {
+    socket.on('user-joined', ({ userId, userName: joinedUserName }) => {
+      // The backend sends { userId, userName }
       setEvents(ev => [
         ...ev,
-        { type: 'user-joined', userName: userId, timestamp: new Date().toISOString() },
+        { type: 'user-joined', userName: joinedUserName || userId, timestamp: new Date().toISOString() },
       ]);
     });
 
-    // Puedes agregar más eventos aquí si el backend los implementa
+    // Handle meeting-ended event to clear chat session
+    socket.on('meeting-ended', ({ meetingId: endedMeetingId, cleared }) => {
+      if (endedMeetingId === meetingId && cleared) {
+        setMessages([]);
+        setEvents(ev => [
+          ...ev,
+          { type: 'system', message: 'La reunión ha finalizado y el historial de chat ha sido limpiado.', timestamp: new Date().toISOString() },
+        ]);
+      }
+    });
+
 
     socket.on('connect_error', (err: any) => {
       setError('No se pudo conectar al chat. Recarga la página');
