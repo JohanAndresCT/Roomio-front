@@ -58,6 +58,20 @@ export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPan
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [systemEvents, setSystemEvents] = useState<string[]>([]);
+  // Escuchar eventos de sistema enviados desde VideoCallRoom
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const customEvent = e as CustomEvent;
+      if (customEvent.detail) {
+        setSystemEvents(prev => [...prev, customEvent.detail]);
+      }
+    };
+    window.addEventListener('chat-system-message', handler);
+    return () => {
+      window.removeEventListener('chat-system-message', handler);
+    };
+  }, []);
 
   // Usar el meetingId recibido por prop, si existe, si no, intentar obtenerlo de la URL
   const meetingId = meetingIdProp
@@ -166,6 +180,14 @@ export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPan
             }
             return null;
           })}
+          {/* Eventos de sistema recibidos por CustomEvent */}
+          {systemEvents.map((msg, idx) => (
+            <div key={`system-${idx}`} className="flex justify-center">
+              <span className="px-4 py-1 rounded-lg bg-red-900 text-white text-sm font-semibold shadow">
+                {msg}
+              </span>
+            </div>
+          ))}
           {/* Mensajes normales */}
           {messages.map((message) => {
             const isOwn = message.userId === userId;

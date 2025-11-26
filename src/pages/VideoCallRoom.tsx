@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { io } from 'socket.io-client';
@@ -93,15 +92,20 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
     // Mostrar notificación cuando un usuario sale
     socket.on('user-left', (payload: { userId: string; userName: string }) => {
-      // Aquí puedes agregar la lógica para mostrar el mensaje en el chat o panel
-      // Por ejemplo, podrías usar un estado para notificaciones:
-      // setNotifications(prev => [...prev, `${payload.userName} ha salido de la reunión`]);
-      // O si tienes lógica de chat, agregarlo como mensaje del sistema
+      // Mostrar el nombre en el chat panel
+      if (window && window.dispatchEvent) {
+        // Custom event para que ChatPanel lo escuche si está implementado
+        window.dispatchEvent(new CustomEvent('chat-system-message', {
+          detail: `${payload.userName} ha salido de la reunión`
+        }));
+      }
+      // Además, log para depuración
       console.log(`${payload.userName} ha salido de la reunión`);
     });
 
     // Listen for participants updates
     socket.on('participants', (list: any[]) => {
+        console.log("Lista de participantes recibida del backend:", list);
       let updatedList = list.map(p => ({
         id: p.userId,
         name: p.userName,
@@ -110,6 +114,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         isSpeaking: false,
         photoURL: p.photoURL || null,
       }));
+        console.log("Lista procesada para mostrar en el frontend:", updatedList);
       // Si el usuario actual existe y no está en la lista, lo agregamos
       if (user) {
         const exists = updatedList.some(p => p.id === user.uid);
@@ -138,6 +143,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           photoURL: user.photoURL || null,
         }];
       }
+        console.log("Lista final de participantes que se renderiza:", updatedList);
       setParticipants(updatedList);
       // Si no hay participantes y tampoco usuario, navegar fuera
       if (updatedList.length === 0 && !user) {
