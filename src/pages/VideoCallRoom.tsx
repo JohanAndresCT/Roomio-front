@@ -1,5 +1,6 @@
 
 import { useState, useEffect, useRef } from 'react';
+import { io } from 'socket.io-client';
 import { useParams, useLocation } from 'react-router-dom';
 import { DateTime } from "luxon";
 import {
@@ -81,7 +82,6 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
   useEffect(() => {
     // Connect to socket server
-    const { io } = require('socket.io-client');
     const socket = io(import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com', {
       transports: ['websocket'],
       query: { meetingId },
