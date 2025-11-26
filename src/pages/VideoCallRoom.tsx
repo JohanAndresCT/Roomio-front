@@ -308,7 +308,6 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               aria-pressed={isChatOpen}
             >
               <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
-              <span className="notification-badge">3</span>
             </Button>
 
             <Button
