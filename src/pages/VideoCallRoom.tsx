@@ -95,62 +95,82 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       }]);
     }
 
-    console.log("Conectando al servidor de sockets...");
-    console.log("URL:", import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com');
-    console.log("meetingId:", meetingId, "uid:", user?.uid);
-
-    // Connect to socket server
-    const socket = io(import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com', {
-      transports: ['websocket'],
-      query: { meetingId, uid: user?.uid },
-    });
-    socketRef.current = socket;
-
-    socket.on('connect', () => {
-      console.log("Conectado al servidor de sockets");
-      // Unirse a la reunión después de conectar
-      console.log("Emitiendo join-meeting para:", meetingId);
-      socket.emit('join-meeting', meetingId);
-    });
-
-    socket.on('connect_error', (error) => {
-      console.error("Error de conexión:", error);
-    });
-
-    // Escuchar actualizaciones del array completo de participantes
-    socket.on('participants', (list: any[]) => {
-      console.log("=== EVENTO PARTICIPANTS RECIBIDO ===");
-      console.log("Lista de participantes recibida del backend:", list);
-      
-      if (!list || list.length === 0) {
-        console.warn("Lista de participantes vacía, manteniendo usuario actual");
-        return;
+    const connectSocket = async () => {
+      // Obtener token de Firebase
+      let token = '';
+      try {
+        const { getAuth } = await import('firebase/auth');
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        if (currentUser) {
+          token = await currentUser.getIdToken();
+        }
+      } catch (err) {
+        console.error("Error al obtener token:", err);
       }
-      
-      const updatedList = list.map((p: any) => ({
-        id: p.userId,
-        name: p.userName,
-        isMuted: false,
-        isVideoOff: false,
-        isSpeaking: false,
-        photoURL: p.photoURL || null,
-      }));
-      
-      console.log("Lista final de participantes:", updatedList);
-      console.log("Número de participantes:", updatedList.length);
-      setParticipants(updatedList);
-    });
 
-    socket.on('user-joined', (payload: any) => {
-      console.log("=== EVENTO USER-JOINED ===", payload);
-    });
+      console.log("Conectando al servidor de sockets...");
+      console.log("URL:", import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com');
+      console.log("meetingId:", meetingId, "uid:", user?.uid);
 
-    socket.on('user-left', (payload: any) => {
-      console.log("=== EVENTO USER-LEFT ===", payload);
-    });
+      // Connect to socket server
+      const socket = io(import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com', {
+        transports: ['websocket'],
+        auth: { token },
+        query: { meetingId, uid: user?.uid },
+      });
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        console.log("Conectado al servidor de sockets");
+        // Unirse a la reunión después de conectar
+        console.log("Emitiendo join-meeting para:", meetingId);
+        socket.emit('join-meeting', meetingId);
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error("Error de conexión:", error);
+      });
+
+      // Escuchar actualizaciones del array completo de participantes
+      socket.on('participants', (list: any[]) => {
+        console.log("=== EVENTO PARTICIPANTS RECIBIDO ===");
+        console.log("Lista de participantes recibida del backend:", list);
+        
+        if (!list || list.length === 0) {
+          console.warn("Lista de participantes vacía, manteniendo usuario actual");
+          return;
+        }
+        
+        const updatedList = list.map((p: any) => ({
+          id: p.userId,
+          name: p.userName,
+          isMuted: false,
+          isVideoOff: false,
+          isSpeaking: false,
+          photoURL: p.photoURL || null,
+        }));
+        
+        console.log("Lista final de participantes:", updatedList);
+        console.log("Número de participantes:", updatedList.length);
+        setParticipants(updatedList);
+      });
+
+      socket.on('user-joined', (payload: any) => {
+        console.log("=== EVENTO USER-JOINED ===", payload);
+      });
+
+      socket.on('user-left', (payload: any) => {
+        console.log("=== EVENTO USER-LEFT ===", payload);
+      });
+    };
+
+    connectSocket();
 
     return () => {
-      socket.disconnect();
+      if (socketRef.current) {
+        socketRef.current.disconnect();
+      }
     };
   }, [meetingId, onNavigate, user]);
 
