@@ -83,18 +83,6 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const socketRef = useRef<any>(null);
 
   useEffect(() => {
-    // Inicializar con el usuario actual
-    if (user) {
-      setParticipants([{
-        id: user.uid,
-        name: user.displayName || 'Tú',
-        isMuted: false,
-        isVideoOff: false,
-        isSpeaking: false,
-        photoURL: user.photoURL || null,
-      }]);
-    }
-
     // Connect to socket server
     const socket = io(import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com', {
       transports: ['websocket'],
@@ -102,40 +90,20 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     });
     socketRef.current = socket;
 
-    // Cuando un usuario entra a la reunión
-    socket.on('user-joined', (payload: { userId: string; userName: string }) => {
-      console.log(`${payload.userName} ha entrado a la reunión`);
-      // Agregar participante si no es el usuario actual
-      if (payload.userId !== user?.uid) {
-        setParticipants(prev => {
-          const exists = prev.some(p => p.id === payload.userId);
-          if (!exists) {
-            return [...prev, {
-              id: payload.userId,
-              name: payload.userName,
-              isMuted: false,
-              isVideoOff: false,
-              isSpeaking: false,
-              photoURL: null,
-            }];
-          }
-          return prev;
-        });
-      }
-    });
-
-    // Cuando un usuario sale de la reunión
-    socket.on('user-left', (payload: { userId: string; userName: string }) => {
-      console.log(`${payload.userName} ha salido de la reunión`);
-      // Eliminar participante
-      setParticipants(prev => prev.filter(p => p.id !== payload.userId));
+    // Escuchar actualizaciones del array completo de participantes
+    socket.on('participants', (list: any[]) => {
+      console.log("Lista de participantes recibida del backend:", list);
+      const updatedList = list.map((p: any) => ({
+        id: p.userId,
+        name: p.userName,
+        isMuted: false,
+        isVideoOff: false,
+        isSpeaking: false,
+        photoURL: p.photoURL || null,
+      }));
       
-      // Mostrar en el chat
-      if (window && window.dispatchEvent) {
-        window.dispatchEvent(new CustomEvent('chat-system-message', {
-          detail: `${payload.userName} ha salido de la reunión`
-        }));
-      }
+      console.log("Lista final de participantes:", updatedList);
+      setParticipants(updatedList);
     });
 
     // Join meeting on mount
