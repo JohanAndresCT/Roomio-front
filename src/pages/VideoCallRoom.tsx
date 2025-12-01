@@ -83,12 +83,36 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const socketRef = useRef<any>(null);
 
   useEffect(() => {
+    // Inicializar con el usuario actual mientras conecta
+    if (user) {
+      setParticipants([{
+        id: user.uid,
+        name: user.displayName || 'Tú',
+        isMuted: false,
+        isVideoOff: false,
+        isSpeaking: false,
+        photoURL: user.photoURL || null,
+      }]);
+    }
+
+    console.log("Conectando al servidor de sockets...");
+    console.log("URL:", import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com');
+    console.log("meetingId:", meetingId, "uid:", user?.uid);
+
     // Connect to socket server
     const socket = io(import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com', {
       transports: ['websocket'],
       query: { meetingId, uid: user?.uid },
     });
     socketRef.current = socket;
+
+    socket.on('connect', () => {
+      console.log("Conectado al servidor de sockets");
+    });
+
+    socket.on('connect_error', (error) => {
+      console.error("Error de conexión:", error);
+    });
 
     // Escuchar actualizaciones del array completo de participantes
     socket.on('participants', (list: any[]) => {
@@ -107,6 +131,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     });
 
     // Join meeting on mount
+    console.log("Emitiendo join-meeting para:", meetingId);
     socket.emit('join-meeting', meetingId);
 
     return () => {
