@@ -108,6 +108,9 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
     socket.on('connect', () => {
       console.log("Conectado al servidor de sockets");
+      // Unirse a la reunión después de conectar
+      console.log("Emitiendo join-meeting para:", meetingId);
+      socket.emit('join-meeting', meetingId);
     });
 
     socket.on('connect_error', (error) => {
@@ -116,7 +119,14 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
     // Escuchar actualizaciones del array completo de participantes
     socket.on('participants', (list: any[]) => {
+      console.log("=== EVENTO PARTICIPANTS RECIBIDO ===");
       console.log("Lista de participantes recibida del backend:", list);
+      
+      if (!list || list.length === 0) {
+        console.warn("Lista de participantes vacía, manteniendo usuario actual");
+        return;
+      }
+      
       const updatedList = list.map((p: any) => ({
         id: p.userId,
         name: p.userName,
@@ -127,12 +137,17 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       }));
       
       console.log("Lista final de participantes:", updatedList);
+      console.log("Número de participantes:", updatedList.length);
       setParticipants(updatedList);
     });
 
-    // Join meeting on mount
-    console.log("Emitiendo join-meeting para:", meetingId);
-    socket.emit('join-meeting', meetingId);
+    socket.on('user-joined', (payload: any) => {
+      console.log("=== EVENTO USER-JOINED ===", payload);
+    });
+
+    socket.on('user-left', (payload: any) => {
+      console.log("=== EVENTO USER-LEFT ===", payload);
+    });
 
     return () => {
       socket.disconnect();
