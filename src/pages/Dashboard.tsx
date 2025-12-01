@@ -63,35 +63,26 @@ export function Dashboard({ onNavigate }: DashboardProps) {
   const [showAISummary, setShowAISummary] = useState(false);
   const [creatingMeeting, setCreatingMeeting] = useState(false);
   const [joiningMeeting, setJoiningMeeting] = useState(false);
+  const [meetings, setMeetings] = useState<Meeting[]>([]);
 
   useEffect(() => {
     const currentUser = getCurrentUser();
     setUser(currentUser);
-  }, []);
-
-  const [meetings] = useState<Meeting[]>([
-    {
-      id: 'MTG-001',
-      title: 'Reunión de equipo',
-      participants: 5,
-      date: '2025-11-12 10:00',
-      status: 'active'
-    },
-    {
-      id: 'MTG-002',
-      title: 'Presentación de proyecto',
-      participants: 8,
-      date: '2025-11-12 14:00',
-      status: 'scheduled'
-    },
-    {
-      id: 'MTG-003',
-      title: 'Sesión de brainstorming',
-      participants: 6,
-      date: '2025-11-11 16:00',
-      status: 'completed'
+    if (currentUser?.uid) {
+      fetch(`/meetings/user/${currentUser.uid}`)
+        .then(res => res.json())
+        .then(data => {
+          // data debe ser un array de reuniones [{ id, participants }]
+          setMeetings(data.map((m: any) => ({
+            id: m.id || m.meetingId,
+            participants: m.participants || 0,
+            title: '',
+            date: '',
+            status: 'active',
+          })));
+        });
     }
-  ]);
+  }, []);
 
   const [aiSummaries] = useState<AISummary[]>([
     {
@@ -292,74 +283,27 @@ export function Dashboard({ onNavigate }: DashboardProps) {
           </Card>
         </div>
 
-        {/* Meetings List */}
+        {/* Meetings List Simplificado */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl text-foreground">Mis reuniones</h2>
-            <Button variant="ghost" size="sm">
-              Ver todas
-            </Button>
-          </div>
-
+          <h2 className="text-xl text-foreground mb-4">Mis reuniones</h2>
           <div className="grid gap-4">
             {meetings.map((meeting) => (
-              <Card key={meeting.id} className="p-4 sm:p-6 hover:shadow-md transition-shadow">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                  <div className="flex items-start gap-4 flex-1">
-                    <div className="w-12 h-12 bg-gradient-to-br from-primary/20 to-accent/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                      <Video className="w-6 h-6 text-primary" aria-hidden="true" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1 flex-wrap">
-                        <h3 className="text-foreground">{meeting.title}</h3>
-                        {getStatusBadge(meeting.status)}
-                      </div>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
-                        <span className="flex items-center gap-1">
-                          <Users className="w-4 h-4" aria-hidden="true" />
-                          {meeting.participants} participantes
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Clock className="w-4 h-4" aria-hidden="true" />
-                          {meeting.date}
-                        </span>
-                        <span className="flex items-center gap-1">
-                          <Copy className="w-4 h-4" aria-hidden="true" />
-                          {meeting.id}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 sm:flex-shrink-0">
-                    {meeting.status === 'active' && (
-                      <Button
-                        onClick={() => onNavigate('room')}
-                        className="bg-green-700 hover:bg-green-800 min-w-[140px]"
-                      >
-                        Unirse ahora
-                      </Button>
-                    )}
-                    {meeting.status === 'scheduled' && (
-                      <Button
-                        onClick={() => onNavigate('room')}
-                        variant="outline"
-                        className="min-w-[140px]"
-                      >
-                        Ver detalles
-                      </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Copiar código"
-                      onClick={() => {
-                        navigator.clipboard.writeText(meeting.id);
-                      }}
-                    >
-                      <Copy className="w-4 h-4" aria-hidden="true" />
-                    </Button>
-                  </div>
+              <Card key={meeting.id} className="p-4 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                  <span className="font-semibold text-foreground">ID: {meeting.id}</span>
+                  <span className="flex items-center gap-1 text-muted-foreground">
+                    <Users className="w-4 h-4" aria-hidden="true" />
+                    {meeting.participants}
+                  </span>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Copiar código"
+                  onClick={() => navigator.clipboard.writeText(meeting.id)}
+                >
+                  <Copy className="w-4 h-4" aria-hidden="true" />
+                </Button>
               </Card>
             ))}
           </div>

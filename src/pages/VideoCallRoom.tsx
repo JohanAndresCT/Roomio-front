@@ -83,6 +83,18 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const socketRef = useRef<any>(null);
 
   useEffect(() => {
+    // Inicializar con el usuario actual
+    if (user) {
+      setParticipants([{
+        id: user.uid,
+        name: user.displayName || 'Tú',
+        isMuted: false,
+        isVideoOff: false,
+        isSpeaking: false,
+        photoURL: user.photoURL || null,
+      }]);
+    }
+
     // Connect to socket server
     const socket = io(import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com', {
       transports: ['websocket'],
@@ -90,64 +102,39 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     });
     socketRef.current = socket;
 
-    // Mostrar notificación cuando un usuario sale
-    socket.on('user-left', (payload: { userId: string; userName: string }) => {
-      // Mostrar el nombre en el chat panel
-      if (window && window.dispatchEvent) {
-        // Custom event para que ChatPanel lo escuche si está implementado
-        window.dispatchEvent(new CustomEvent('chat-system-message', {
-          detail: `${payload.userName} ha salido de la reunión`
-        }));
-      }
-      // Además, log para depuración
-      console.log(`${payload.userName} ha salido de la reunión`);
-    });
-
-    // Listen for participants updates
-    socket.on('participants', (list: any[]) => {
-        console.log("Lista de participantes recibida del backend:", list);
-      let updatedList = list.map(p => ({
-        id: p.userId,
-        name: p.userName,
-        isMuted: false,
-        isVideoOff: false,
-        isSpeaking: false,
-        photoURL: p.photoURL || null,
-      }));
-        console.log("Lista procesada para mostrar en el frontend:", updatedList);
-      // Si el usuario actual existe y no está en la lista, lo agregamos
-      if (user) {
-        const exists = updatedList.some(p => p.id === user.uid);
-        if (!exists) {
-          updatedList = [
-            {
-              id: user.uid,
-              name: user.displayName || 'Tú',
+    // Cuando un usuario entra a la reunión
+    socket.on('user-joined', (payload: { userId: string; userName: string }) => {
+      console.log(`${payload.userName} ha entrado a la reunión`);
+      // Agregar participante si no es el usuario actual
+      if (payload.userId !== user?.uid) {
+        setParticipants(prev => {
+          const exists = prev.some(p => p.id === payload.userId);
+          if (!exists) {
+            return [...prev, {
+              id: payload.userId,
+              name: payload.userName,
               isMuted: false,
               isVideoOff: false,
               isSpeaking: false,
-              photoURL: user.photoURL || null,
-            },
-            ...updatedList
-          ];
-        }
+              photoURL: null,
+            }];
+          }
+          return prev;
+        });
       }
-      // Si no hay participantes pero existe el usuario, mostrar solo su tarjeta
-      if (updatedList.length === 0 && user) {
-        updatedList = [{
-          id: user.uid,
-          name: user.displayName || 'Tú',
-          isMuted: false,
-          isVideoOff: false,
-          isSpeaking: false,
-          photoURL: user.photoURL || null,
-        }];
-      }
-        console.log("Lista final de participantes que se renderiza:", updatedList);
-      setParticipants(updatedList);
-      // Si no hay participantes y tampoco usuario, navegar fuera
-      if (updatedList.length === 0 && !user) {
-        onNavigate('dashboard');
+    });
+
+    // Cuando un usuario sale de la reunión
+    socket.on('user-left', (payload: { userId: string; userName: string }) => {
+      console.log(`${payload.userName} ha salido de la reunión`);
+      // Eliminar participante
+      setParticipants(prev => prev.filter(p => p.id !== payload.userId));
+      
+      // Mostrar en el chat
+      if (window && window.dispatchEvent) {
+        window.dispatchEvent(new CustomEvent('chat-system-message', {
+          detail: `${payload.userName} ha salido de la reunión`
+        }));
       }
     });
 
@@ -157,7 +144,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     return () => {
       socket.disconnect();
     };
-  }, [meetingId, onNavigate]);
+  }, [meetingId, onNavigate, user]);
 
   const handleMicToggle = () => {
     setIsMicOn(!isMicOn);
