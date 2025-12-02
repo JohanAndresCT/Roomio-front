@@ -37,18 +37,30 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
       
       try {
         console.log('🎤 Iniciando conexión de voz...');
+        console.log('🌐 URL del servidor:', import.meta.env.VITE_VOICE_SERVER_URL);
 
-        // Conectar al servidor de voz
-        const voiceSocket = io(import.meta.env.VITE_VOICE_SERVER_URL || 'https://roomio-voice-service.onrender.com', {
-          transports: ['websocket']
-        });
-        socketRef.current = voiceSocket;
-
-        // Obtener configuración ICE del servidor
+        // Obtener configuración ICE del servidor primero
+        console.log('📡 Obteniendo configuración ICE...');
         const response = await fetch(`${import.meta.env.VITE_VOICE_SERVER_URL || 'https://roomio-voice-service.onrender.com'}/voice-config`);
+        
+        if (!response.ok) {
+          throw new Error(`Error al obtener config ICE: ${response.status} ${response.statusText}`);
+        }
+        
         const { iceServers } = await response.json();
         console.log('🌐 ICE Servers configurados:', iceServers);
 
+        // Conectar al servidor de voz
+        console.log('🔌 Conectando al servidor de voz...');
+        const voiceSocket = io(import.meta.env.VITE_VOICE_SERVER_URL || 'https://roomio-voice-service.onrender.com', {
+          transports: ['websocket'],
+          reconnection: true,
+          reconnectionAttempts: 5,
+          reconnectionDelay: 1000,
+        });
+        socketRef.current = voiceSocket;
+
+        // Registrar listeners de socket
         voiceSocket.on('connect', async () => {
           console.log('✅ Conectado al servidor de voz');
           setIsConnected(true);
@@ -177,14 +189,27 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
         });
 
         voiceSocket.on('connect_error', (err) => {
-          console.error('❌ Error de conexión:', err);
-          setError('Error al conectar con el servidor de voz');
+          console.error('❌ Error de conexión socket:', err);
+          console.error('Error detalles:', err.message);
+          setError(`Error al conectar: ${err.message}`);
+          setIsConnected(false);
+          isInitializingRef.current = false;
         });
 
-      } catch (err) {
-        console.error('❌ Error al inicializar voz:', err);
-        setError('Error al inicializar conexión de voz');
-      } finally {
+        voiceSocket.on('disconnect', () => {
+          console.log('🔌 Socket desconectado');
+          setIsConnected(false);
+          isInitializingRef.current = false;
+        });
+
+        // Inicialización exitosa
+        console.log('✅ Hook de voz inicializado correctamente');
+
+      } catch (err: any) {
+        console.error('❌ Error al inicializar voz (catch):', err);
+        console.error('Error stack:', err?.stack);
+        console.error('Error message:', err?.message);
+        setError(err?.message || 'Error al inicializar conexión de voz');
         isInitializingRef.current = false;
       }
     };
