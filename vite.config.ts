@@ -15,6 +15,10 @@ export default async () => {
       react(),
       ...(tsconfigPaths ? [tsconfigPaths()] : [])
     ],
+    define: {
+      // Define global para compatibilidad con librerías que lo necesitan (como simple-peer)
+      global: 'globalThis',
+    },
     server: {
       // listen on all interfaces (IPv4 + IPv6) so localhost / 127.0.0.1 work reliably
       host: true,

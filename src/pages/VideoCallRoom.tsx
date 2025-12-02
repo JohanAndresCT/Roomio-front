@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
+import { useVoiceCall } from '../hooks/useVoiceCall';
 import { io } from 'socket.io-client';
 import { useParams, useLocation } from 'react-router-dom';
 import { DateTime } from "luxon";
@@ -81,6 +82,23 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const socketRef = useRef<any>(null);
+
+  // 🎤 Hook para manejar la conexión de voz
+  const { isConnected: isVoiceConnected, error: voiceError, peers: voicePeers } = useVoiceCall({
+    meetingId: meetingId,
+    userId: user?.uid || '',
+    enabled: isMicOn
+  });
+
+  // Mostrar estado de conexión de voz
+  useEffect(() => {
+    if (isVoiceConnected) {
+      console.log('✅ Voz conectada. Peers activos:', voicePeers.length);
+    }
+    if (voiceError) {
+      console.error('❌ Error de voz:', voiceError);
+    }
+  }, [isVoiceConnected, voiceError, voicePeers]);
 
   useEffect(() => {
     // Si ya hay una conexión activa, no crear otra
