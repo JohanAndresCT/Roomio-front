@@ -47,6 +47,7 @@ export interface ChatEvent {
  * @property {string} userName - User name of the participant.
  * @property {string} token - Authentication token for the chat server.
  * @property {string} [serverUrl] - Chat server URL (default provided).
+ * @property {Socket} [externalSocket] - Optional external socket to use instead of creating a new one.
  */
 interface UseChatSocketOptions {
   meetingId: string;
@@ -54,6 +55,7 @@ interface UseChatSocketOptions {
   userName: string;
   token: string;
   serverUrl?: string;
+  externalSocket?: Socket | null;
 }
 
 
@@ -63,7 +65,7 @@ interface UseChatSocketOptions {
  * @param {UseChatSocketOptions} options - Options for chat socket connection.
  * @returns {Object} Chat state and actions (messages, events, sendMessage, etc).
  */
-export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 'https://roomio-chat-service.onrender.com' }: UseChatSocketOptions) {
+export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 'https://roomio-chat-service.onrender.com', externalSocket = null }: UseChatSocketOptions) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [events, setEvents] = useState<ChatEvent[]>([]);
   const [connected, setConnected] = useState(false);
@@ -81,23 +83,37 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
   }, []);
 
   useEffect(() => {
-    // Connect socket
-    const socket = io(serverUrl, {
-      transports: ['websocket'],
-      auth: { token },
-      query: { uid: userId }, // Cambiar a 'uid' para coincidir con el backend
-      reconnectionAttempts: 3,
-      reconnectionDelay: 1000,
-      reconnectionDelayMax: 4000,
-    });
-    socketRef.current = socket;
+    // Use external socket if provided, otherwise create a new one
+    let socket: Socket;
+    let isExternalSocket = false;
+    
+    if (externalSocket) {
+      console.log('💬 Using external shared socket for chat');
+      socket = externalSocket;
+      isExternalSocket = true;
+      socketRef.current = socket;
+    } else {
+      console.log('💬 Creating new socket for chat');
+      socket = io(serverUrl, {
+        transports: ['websocket'],
+        auth: { token },
+        query: { uid: userId },
+        reconnectionAttempts: 3,
+        reconnectionDelay: 1000,
+        reconnectionDelayMax: 4000,
+      });
+      socketRef.current = socket;
+    }
 
     socket.on('connect', () => {
       setConnected(true);
       setReconnecting(false);
       setError(null);
-      // Unirse a la reunión
-      socket.emit('join-meeting', meetingId);
+      // Only emit join-meeting if this is NOT an external socket
+      // (external socket already joined via VideoCallRoom)
+      if (!isExternalSocket) {
+        socket.emit('join-meeting', meetingId);
+      }
     });
 
     socket.on('disconnect', () => {
@@ -187,9 +203,12 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
     });
 
     return () => {
-      socket.disconnect();
+      // Only disconnect if this is NOT an external socket
+      if (!isExternalSocket) {
+        socket.disconnect();
+      }
     };
-  }, [meetingId, userId, userName, token, serverUrl, scrollToBottom]);
+  }, [meetingId, userId, userName, token, serverUrl, scrollToBottom, externalSocket]);
 
   // Enviar mensaje
   const sendMessage = useCallback((text: string) => {

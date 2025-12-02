@@ -39,11 +39,13 @@ interface Message {
  * @property {boolean} isOpen - Whether the chat panel is open.
  * @property {() => void} onClose - Function to close the chat panel.
  * @property {string} [meetingId] - Meeting ID for the chat session.
+ * @property {any} [externalSocket] - Optional external socket from VideoCallRoom.
  */
 interface ChatPanelProps {
   isOpen: boolean;
   onClose: () => void;
   meetingId?: string;
+  externalSocket?: any;
 }
 
 
@@ -54,7 +56,7 @@ interface ChatPanelProps {
  * @param {ChatPanelProps} props - Component props.
  * @returns {JSX.Element | null} Chat panel layout or null if not open.
  */
-export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPanelProps) {
+export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp, externalSocket }: ChatPanelProps) {
   const { user } = useAuth();
   const [newMessage, setNewMessage] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -112,7 +114,14 @@ export function ChatPanel({ isOpen, onClose, meetingId: meetingIdProp }: ChatPan
     connected,
     reconnecting,
     events,
-  } = useChatSocket({ meetingId, userId, userName, token, serverUrl: chatServerUrl });
+  } = useChatSocket({ 
+    meetingId, 
+    userId, 
+    userName, 
+    token, 
+    serverUrl: chatServerUrl,
+    externalSocket 
+  });
 
   useEffect(() => {
     if (scrollRef.current) {

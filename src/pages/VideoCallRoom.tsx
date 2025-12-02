@@ -177,6 +177,9 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         console.log("=== EVENTO PARTICIPANTS RECIBIDO ===");
         console.log("Lista de participantes recibida del backend:", JSON.stringify(list, null, 2));
         console.log("Total recibido del backend:", list.length);
+        list.forEach(p => {
+          console.log(`Participant ${p.userName}: isMuted=${p.isMuted}, isVideoOff=${p.isVideoOff}`);
+        });
         
         if (!list || list.length === 0) {
           console.warn("Empty participants list, keeping current user");
@@ -192,15 +195,17 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
             console.log(`Processing participant: ${p.userName} (${p.userId})`, {
               isCurrentUser,
               photoURL: p.photoURL,
-              willUsePhoto: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null)
+              willUsePhoto: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null),
+              backendMuted: p.isMuted,
+              backendVideoOff: p.isVideoOff
             });
             
             return {
               id: p.userId,
               name: p.userName,
-              // Use backend state if available, otherwise default values
-              isMuted: p.isMuted !== undefined ? p.isMuted : (isCurrentUser ? !isMicOn : true),
-              isVideoOff: p.isVideoOff !== undefined ? p.isVideoOff : true,
+              // Use backend state directly - backend is source of truth
+              isMuted: p.isMuted ?? true,
+              isVideoOff: p.isVideoOff ?? true,
               isSpeaking: false,
               photoURL: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null),
             };
@@ -218,9 +223,14 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       // HU-006: Listen for media state changes (mic/camera)
       socket.on('media-state-updated', ({ userId, isMuted, isVideoOff }: any) => {
         console.log(`📡 Media state updated: ${userId}`, { isMuted, isVideoOff });
-        setParticipants(prev => prev.map(p => 
-          p.id === userId ? { ...p, isMuted, isVideoOff } : p
-        ));
+        console.log('Current user ID:', user?.uid);
+        setParticipants(prev => {
+          const updated = prev.map(p => 
+            p.id === userId ? { ...p, isMuted, isVideoOff } : p
+          );
+          console.log('Participants after media-state-updated:', updated);
+          return updated;
+        });
       });
     };
 
@@ -239,7 +249,12 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const handleMicToggle = () => {
     const newMicState = !isMicOn;
     setIsMicOn(newMicState);
-    console.log(newMicState ? 'Microphone activated' : 'Microphone deactivated');
+    console.log(newMicState ? '🎤 Microphone activated' : '🔇 Microphone deactivated');
+    console.log('Emitting update-media-state:', { 
+      meetingId, 
+      isMuted: !newMicState, 
+      isVideoOff: !isVideoOn 
+    });
     
     // HU-006: Optimistic update of local state
     setParticipants(prev => prev.map(p => 
@@ -247,19 +262,26 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     ));
     
     // HU-006: Synchronize state with all participants via Socket.io
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('update-media-state', {
         meetingId,
         isMuted: !newMicState,
         isVideoOff: !isVideoOn
       });
+    } else {
+      console.error('❌ Socket not connected, cannot send media state update');
     }
   };
 
   const handleVideoToggle = () => {
     const newVideoState = !isVideoOn;
     setIsVideoOn(newVideoState);
-    console.log(newVideoState ? 'Camera activated' : 'Camera deactivated');
+    console.log(newVideoState ? '📹 Camera activated' : '🚫 Camera deactivated');
+    console.log('Emitting update-media-state:', { 
+      meetingId, 
+      isMuted: !isMicOn, 
+      isVideoOff: !newVideoState 
+    });
     
     // Update current participant state
     setParticipants(prev => prev.map(p => 
@@ -267,12 +289,14 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     ));
     
     // Send state to backend to synchronize with other users
-    if (socketRef.current) {
+    if (socketRef.current?.connected) {
       socketRef.current.emit('update-media-state', {
         meetingId,
         isMuted: !isMicOn,
         isVideoOff: !newVideoState
       });
+    } else {
+      console.error('❌ Socket not connected, cannot send media state update');
     }
   };
 
@@ -469,7 +493,12 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       </footer>
 
       {/* Panels */}
-      <ChatPanel isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} meetingId={meetingId} />
+      <ChatPanel 
+        isOpen={isChatOpen} 
+        onClose={() => setIsChatOpen(false)} 
+        meetingId={meetingId}
+        externalSocket={socketRef.current}
+      />
       {/* <AccessibilityPanel isOpen={isAccessibilityOpen} onClose={() => setIsAccessibilityOpen(false)} />
       <AISummaryPanel isOpen={isAISummaryOpen} onClose={() => setIsAISummaryOpen(false)} /> */}
     </div>
