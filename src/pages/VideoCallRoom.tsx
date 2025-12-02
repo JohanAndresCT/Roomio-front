@@ -83,17 +83,28 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const socketRef = useRef<any>(null);
 
   useEffect(() => {
-    // Inicializar con el usuario actual mientras conecta
-    if (user) {
-      setParticipants([{
-        id: user.uid,
-        name: user.displayName || 'Tú',
-        isMuted: false,
-        isVideoOff: true,
-        isSpeaking: false,
-        photoURL: user.photoURL || null,
-      }]);
+    // Si ya hay una conexión activa, no crear otra
+    if (socketRef.current?.connected) {
+      console.log("⚠️ Socket ya conectado, saltando reconexión");
+      return;
     }
+
+    if (!user) {
+      console.log("⚠️ No hay usuario, esperando...");
+      return;
+    }
+
+    console.log("🔌 Iniciando conexión de socket para:", user.uid);
+
+    // Inicializar con el usuario actual mientras conecta
+    setParticipants([{
+      id: user.uid,
+      name: user.displayName || 'Tú',
+      isMuted: false,
+      isVideoOff: true,
+      isSpeaking: false,
+      photoURL: user.photoURL || null,
+    }]);
 
     const connectSocket = async () => {
       // Obtener token de Firebase
@@ -123,9 +134,17 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
       socket.on('connect', () => {
         console.log("Conectado al servidor de sockets");
-        // Unirse a la reunión después de conectar
+        // Unirse a la reunión después de conectar con información del usuario
         console.log("Emitiendo join-meeting para:", meetingId);
-        socket.emit('join-meeting', meetingId);
+        console.log("Datos del usuario:", {
+          uid: user?.uid,
+          displayName: user?.displayName,
+          photoURL: user?.photoURL
+        });
+        socket.emit('join-meeting', {
+          meetingId,
+          photoURL: user?.photoURL || null
+        });
       });
 
       socket.on('connect_error', (error) => {
@@ -135,7 +154,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       // Escuchar actualizaciones del array completo de participantes
       socket.on('participants', (list: any[]) => {
         console.log("=== EVENTO PARTICIPANTS RECIBIDO ===");
-        console.log("Lista de participantes recibida del backend:", list);
+        console.log("Lista de participantes recibida del backend:", JSON.stringify(list, null, 2));
+        console.log("Total recibido del backend:", list.length);
         
         if (!list || list.length === 0) {
           console.warn("Lista de participantes vacía, manteniendo usuario actual");
@@ -147,6 +167,12 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
             // Si es el usuario actual, preservar estados locales
             const isCurrentUser = p.userId === user?.uid;
             const existingParticipant = prevParticipants.find(prev => prev.id === p.userId);
+            
+            console.log(`Procesando participante: ${p.userName} (${p.userId})`, {
+              isCurrentUser,
+              photoURL: p.photoURL,
+              willUsePhoto: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null)
+            });
             
             return {
               id: p.userId,
@@ -160,7 +186,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           });
           
           console.log("Lista final de participantes:", updatedList);
-          console.log("Número de participantes:", updatedList.length);
+          console.log("Número de participantes FINAL:", updatedList.length);
           return updatedList;
         });
       });
@@ -177,11 +203,13 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     connectSocket();
 
     return () => {
+      console.log("🔌 Desconectando socket...");
       if (socketRef.current) {
         socketRef.current.disconnect();
+        socketRef.current = null;
       }
     };
-  }, [meetingId, onNavigate, user]);
+  }, [meetingId, user?.uid]); // Solo reconectar si cambia el meetingId o el uid del usuario
 
   const handleMicToggle = () => {
     const newMicState = !isMicOn;
