@@ -212,13 +212,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         });
       });
 
-      socket.on('user-joined', (payload: any) => {
-        console.log("=== EVENTO USER-JOINED ===", payload);
-      });
-
-      socket.on('user-left', (payload: any) => {
-        console.log("=== EVENTO USER-LEFT ===", payload);
-      });
+      // Note: user-joined and user-left events are handled by useChatSocket for chat display
+      // No need to listen here to avoid duplicate messages
 
       // HU-006: Listen for media state changes (mic/camera)
       socket.on('media-state-updated', ({ userId, isMuted, isVideoOff }: any) => {
