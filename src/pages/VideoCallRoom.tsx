@@ -81,7 +81,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const [isAISummaryOpen, setIsAISummaryOpen] = useState(false);
 
   const [participants, setParticipants] = useState<Participant[]>([]);
-  const socketRef = useRef<any>(null);
+  const [socket, setSocket] = useState<any>(null);
 
   // usability story HU-007: Voice Connection Indicator
   // Hook to manage WebRTC voice connection
@@ -103,7 +103,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
   useEffect(() => {
     // If there's already an active connection, don't create another
-    if (socketRef.current?.connected) {
+    if (socket?.connected) {
       console.log("⚠️ Socket already connected, skipping reconnection");
       return;
     }
@@ -149,7 +149,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         auth: { token },
         query: { meetingId, uid: user?.uid },
       });
-      socketRef.current = socket;
+      setSocket(socket);
 
       socket.on('connect', () => {
         console.log("Connected to socket server");
@@ -287,9 +287,9 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
     return () => {
       console.log("🔌 Disconnecting socket...");
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
       }
     };
   }, [meetingId, user?.uid]); // Only reconnect if meetingId or user uid changes
@@ -311,8 +311,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     ));
     
     // HU-006: Synchronize state with all participants via Socket.io
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('update-media-state', {
+    if (socket?.connected) {
+      socket.emit('update-media-state', {
         meetingId,
         isMuted: !newMicState,
         isVideoOff: !isVideoOn
@@ -338,8 +338,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     ));
     
     // Send state to backend to synchronize with other users
-    if (socketRef.current?.connected) {
-      socketRef.current.emit('update-media-state', {
+    if (socket?.connected) {
+      socket.emit('update-media-state', {
         meetingId,
         isMuted: !isMicOn,
         isVideoOff: !newVideoState
@@ -546,7 +546,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         isOpen={isChatOpen} 
         onClose={() => setIsChatOpen(false)} 
         meetingId={meetingId}
-        externalSocket={socketRef.current}
+        externalSocket={socket}
       />
       {/* <AccessibilityPanel isOpen={isAccessibilityOpen} onClose={() => setIsAccessibilityOpen(false)} />
       <AISummaryPanel isOpen={isAISummaryOpen} onClose={() => setIsAISummaryOpen(false)} /> */}

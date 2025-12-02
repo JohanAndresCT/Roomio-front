@@ -112,7 +112,10 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
       // Only emit join-meeting if this is NOT an external socket
       // (external socket already joined via VideoCallRoom)
       if (!isExternalSocket) {
+        console.log('📧 Chat socket emitting join-meeting');
         socket.emit('join-meeting', meetingId);
+      } else {
+        console.log('📧 External socket already joined, skipping join-meeting');
       }
     });
 
@@ -203,6 +206,17 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
     });
 
     return () => {
+      // Remove all event listeners to prevent duplicates
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('reconnect_attempt');
+      socket.off('chat-history');
+      socket.off('new-message');
+      socket.off('user-joined');
+      socket.off('user-left');
+      socket.off('meeting-ended');
+      socket.off('connect_error');
+      
       // Only disconnect if this is NOT an external socket
       if (!isExternalSocket) {
         socket.disconnect();
