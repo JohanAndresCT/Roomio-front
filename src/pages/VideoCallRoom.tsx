@@ -160,6 +160,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           displayName: user?.displayName,
           photoURL: user?.photoURL
         });
+        console.log("🎤 Initial media state:", { isMicOn, isVideoOn, sending_isMuted: !isMicOn, sending_isVideoOff: !isVideoOn });
         socket.emit('join-meeting', {
           meetingId,
           photoURL: user?.photoURL || null,
@@ -181,6 +182,17 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           console.log(`Participant ${p.userName}: isMuted=${p.isMuted}, isVideoOff=${p.isVideoOff}`);
         });
         
+        // Find current user in the list
+        const currentUserInList = list.find(p => p.userId === user?.uid);
+        if (currentUserInList) {
+          console.log("👤 Current user state from backend:", {
+            isMuted: currentUserInList.isMuted,
+            isVideoOff: currentUserInList.isVideoOff,
+            local_isMicOn: isMicOn,
+            local_isVideoOn: isVideoOn
+          });
+        }
+        
         if (!list || list.length === 0) {
           console.warn("Empty participants list, keeping current user");
           return;
@@ -188,7 +200,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         
         setParticipants(prevParticipants => {
           const updatedList = list.map((p: any) => {
-            // If it's the current user, preserve local states
+            // If it's the current user, preserve local states to avoid race conditions
             const isCurrentUser = p.userId === user?.uid;
             const existingParticipant = prevParticipants.find(prev => prev.id === p.userId);
             
@@ -197,13 +209,29 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               photoURL: p.photoURL,
               willUsePhoto: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null),
               backendMuted: p.isMuted,
-              backendVideoOff: p.isVideoOff
+              backendVideoOff: p.isVideoOff,
+              existingMuted: existingParticipant?.isMuted,
+              existingVideoOff: existingParticipant?.isVideoOff
             });
             
+            // For current user, preserve existing state to avoid race conditions
+            // Backend state will be updated via media-state-updated event
+            if (isCurrentUser && existingParticipant) {
+              console.log("🔒 Preserving current user local state");
+              return {
+                id: p.userId,
+                name: p.userName,
+                isMuted: existingParticipant.isMuted, // Keep local state
+                isVideoOff: existingParticipant.isVideoOff, // Keep local state
+                isSpeaking: existingParticipant.isSpeaking,
+                photoURL: user?.photoURL || p.photoURL || null,
+              };
+            }
+            
+            // For other participants, use backend state
             return {
               id: p.userId,
               name: p.userName,
-              // Use backend state directly - backend is source of truth
               isMuted: p.isMuted ?? true,
               isVideoOff: p.isVideoOff ?? true,
               isSpeaking: false,
@@ -222,13 +250,22 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
       // HU-006: Listen for media state changes (mic/camera)
       socket.on('media-state-updated', ({ userId, isMuted, isVideoOff }: any) => {
-        console.log(`📡 Media state updated: ${userId}`, { isMuted, isVideoOff });
-        console.log('Current user ID:', user?.uid);
+        const isCurrentUser = userId === user?.uid;
+        console.log(`📡 Media state updated: ${userId}`, { 
+          isMuted, 
+          isVideoOff,
+          isCurrentUser,
+          currentUserId: user?.uid 
+        });
         setParticipants(prev => {
           const updated = prev.map(p => 
             p.id === userId ? { ...p, isMuted, isVideoOff } : p
           );
           console.log('Participants after media-state-updated:', updated);
+          if (isCurrentUser) {
+            const currentUserParticipant = updated.find(p => p.id === user?.uid);
+            console.log('✅ Current user participant after update:', currentUserParticipant);
+          }
           return updated;
         });
       });
