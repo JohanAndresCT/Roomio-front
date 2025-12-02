@@ -73,6 +73,9 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
   const [error, setError] = useState<string | null>(null);
   const socketRef = useRef<Socket | null>(null);
   const reconnectAttempts = useRef(0);
+  
+  // Track if we've already shown the welcome message
+  const hasShownWelcome = useRef(false);
 
   // Scroll helper (for ChatPanel)
   const scrollToBottom = useCallback(() => {
@@ -141,10 +144,16 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
         text: msg.message,
         timestamp: msg.time,
       })));
-      setEvents(ev => [
-        ...ev,
-        { type: 'system', message: 'Conectado al chat', timestamp: new Date().toISOString() },
-      ]);
+      
+      // Only show system message (not user-joined, it will come from backend)
+      if (!hasShownWelcome.current) {
+        setEvents(ev => [
+          ...ev,
+          { type: 'system', message: 'Conectado al chat', timestamp: new Date().toISOString() },
+        ]);
+        hasShownWelcome.current = true;
+      }
+      
       scrollToBottom();
     });
 
@@ -175,12 +184,7 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
     socket.on('user-joined', ({ userId: joinedUserId, userName: joinedUserName }) => {
       console.log('📨 user-joined event received:', { joinedUserId, joinedUserName, myUserId: userId });
       
-      // Don't show our own join message to avoid confusion
-      if (joinedUserId === userId) {
-        console.log('💬 Skipping own user-joined event');
-        return;
-      }
-      
+      // Show join message for ALL users, including self
       console.log('✅ Adding user-joined event to chat');
       setEvents(ev => [
         ...ev,
@@ -193,6 +197,13 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
       console.log('📨 user-left event received:', payload);
       // Si el backend envía userName, úsalo; si no, muestra el UID
       const name = payload.userName || payload.userId || payload.leftUserId;
+      
+      // Don't show our own disconnect message (user will leave the page anyway)
+      if (payload.userId === userId) {
+        console.log('💬 Skipping own user-left event');
+        return;
+      }
+      
       console.log('✅ Adding user-left event to chat:', name);
       setEvents(ev => [
         ...ev,
@@ -261,6 +272,15 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
     }
   }, [meetingId, connected, userId, userName]);
 
+  // Function to manually disconnect (useful when user clicks Leave Call)
+  const disconnect = useCallback(() => {
+    const socket = socketRef.current;
+    if (socket && socket.connected) {
+      console.log('💬 Manually disconnecting chat socket');
+      socket.disconnect();
+    }
+  }, []);
+
   return {
     messages,
     events,
@@ -269,5 +289,7 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
     error,
     sendMessage,
     scrollToBottom,
+    disconnect,
+    socket: socketRef.current,
   };
 }

@@ -369,7 +369,15 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   };
 
   const handleLeaveCall = () => {
-    console.log('You have left the meeting');
+    console.log('🚪 Leaving meeting...');
+    
+    // Disconnect socket to trigger user-left event on backend
+    if (socket?.connected) {
+      console.log('🔌 Disconnecting socket...');
+      socket.disconnect();
+    }
+    
+    console.log('✅ You have left the meeting');
     onNavigate('dashboard');
   };
 
