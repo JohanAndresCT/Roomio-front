@@ -82,7 +82,10 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
             console.log('🎤 Stream de audio obtenido');
 
             // Unirse a la reunión
+            console.log('📤 Emitiendo join-meeting:', { meetingId, userId });
             voiceSocket.emit('join-meeting', meetingId, userId);
+            
+            console.log('✅ join-meeting emitido, esperando evento user-connected...');
           } catch (err) {
             console.error('❌ Error al obtener audio:', err);
             setError('No se pudo acceder al micrófono');
@@ -92,7 +95,13 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
         // Cuando un nuevo usuario se conecta
         voiceSocket.on('user-connected', (remoteUserId: string) => {
           console.log('👤 Usuario conectado:', remoteUserId);
-          if (!localStreamRef.current) return;
+          console.log('Mi userId:', userId);
+          console.log('¿Tengo stream local?:', !!localStreamRef.current);
+          
+          if (!localStreamRef.current) {
+            console.warn('⚠️ No hay stream local, no se puede crear peer');
+            return;
+          }
 
           // Crear peer como initiator
           const peer = new Peer({
@@ -104,6 +113,7 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
 
           peer.on('signal', (signalData) => {
             console.log('📤 Enviando señal a:', remoteUserId);
+            console.log('📦 Datos de señal:', signalData.type);
             voiceSocket.emit('signal', {
               to: remoteUserId,
               from: userId,
@@ -113,6 +123,7 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
 
           peer.on('stream', (remoteStream) => {
             console.log('🔊 Stream remoto recibido de:', remoteUserId);
+            console.log('🎵 Tracks de audio:', remoteStream.getAudioTracks().length);
             playRemoteStream(remoteStream, remoteUserId);
           });
 

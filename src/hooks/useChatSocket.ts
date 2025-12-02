@@ -85,7 +85,7 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
     const socket = io(serverUrl, {
       transports: ['websocket'],
       auth: { token },
-      query: { userId, userName },
+      query: { uid: userId }, // Cambiar a 'uid' para coincidir con el backend
       reconnectionAttempts: 3,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 4000,
