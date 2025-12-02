@@ -153,6 +153,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
       socket.on('connect', () => {
         console.log("Connected to socket server");
+        console.log("✅ Socket ID:", socket.id);
+        console.log("✅ Socket connected:", socket.connected);
         // Join meeting after connecting with user information
         console.log("Emitting join-meeting for:", meetingId);
         console.log("User data:", {
@@ -171,6 +173,20 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
       socket.on('connect_error', (error) => {
         console.error("Connection error:", error);
+      });
+
+      // Debug: Listen to ALL events to see what's coming from backend
+      const originalOn = socket.on.bind(socket);
+      socket.on = function(event: string, listener: any) {
+        if (!event.startsWith('$')) { // Skip internal socket.io events
+          console.log(`📥 Registering listener for event: "${event}"`);
+        }
+        return originalOn(event, listener);
+      };
+      
+      // Log all incoming events
+      socket.onAny((eventName: string, ...args: any[]) => {
+        console.log(`📨 Received event: "${eventName}"`, args);
       });
 
       // Listen for updates to the complete participants array
@@ -255,6 +271,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       // No need to listen here to avoid duplicate messages
 
       // HU-006: Listen for media state changes (mic/camera)
+      console.log("🎧 Registering listener for 'media-state-updated' event");
       socket.on('media-state-updated', ({ userId, isMuted, isVideoOff }: any) => {
         const isCurrentUser = userId === user?.uid;
         console.log(`📡 Media state updated: ${userId}`, { 
