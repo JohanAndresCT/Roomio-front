@@ -718,8 +718,18 @@ footer[role="contentinfo"] .text-center {
 }
 
 .participant-speaking {
-  ring: 2px solid #22C55E;
-  box-shadow: 0 0 0 2px #22C55E;
+  border: 3px solid #22C55E;
+  box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3), 0 0 20px rgba(34, 197, 94, 0.4);
+  animation: speaking-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes speaking-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.3), 0 0 20px rgba(34, 197, 94, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(34, 197, 94, 0.5), 0 0 30px rgba(34, 197, 94, 0.6);
+  }
 }
 
 /* Video off state */
@@ -785,25 +795,34 @@ footer[role="contentinfo"] .text-center {
 /* Voice indicator */
 .voice-indicator {
   display: flex;
-  gap: 0.125rem;
+  gap: 0.15rem;
+  align-items: flex-end;
+  height: 1rem;
 }
 
 .voice-bar {
-  width: 0.25rem;
-  height: 0.75rem;
+  width: 0.2rem;
   background: #22C55E;
   border-radius: 0.125rem;
-  animation: pulse 1s ease-in-out infinite;
+  animation: voice-pulse 0.6s ease-in-out infinite;
+  transform-origin: bottom;
 }
 
 .voice-bar-delay-1 {
-  height: 1rem;
-  animation-delay: 150ms;
+  animation-delay: 0.15s;
 }
 
 .voice-bar-delay-2 {
-  height: 0.75rem;
-  animation-delay: 300ms;
+  animation-delay: 0.3s;
+}
+
+@keyframes voice-pulse {
+  0%, 100% {
+    height: 0.4rem;
+  }
+  50% {
+    height: 1rem;
+  }
 }
 
 /* Footer controls */

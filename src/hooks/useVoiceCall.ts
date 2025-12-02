@@ -17,11 +17,63 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [peers, setPeers] = useState<Map<string, PeerConnection>>(new Map());
+  const [speakingUsers, setSpeakingUsers] = useState<Set<string>>(new Set());
   
   const socketRef = useRef<Socket | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
   const isInitializingRef = useRef(false);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
+
+  // Función para detectar actividad de voz
+  const setupAudioDetection = (stream: MediaStream, speakerId: string) => {
+    try {
+      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const microphone = audioContext.createMediaStreamSource(stream);
+      
+      analyser.fftSize = 256;
+      const bufferLength = analyser.frequencyBinCount;
+      const dataArray = new Uint8Array(bufferLength);
+      
+      microphone.connect(analyser);
+      
+      // Guardar referencias
+      if (speakerId === userId) {
+        audioContextRef.current = audioContext;
+        analyserRef.current = analyser;
+      }
+      
+      const detectSpeaking = () => {
+        analyser.getByteFrequencyData(dataArray);
+        
+        // Calcular volumen promedio
+        const average = dataArray.reduce((a, b) => a + b) / bufferLength;
+        
+        // Umbral de detección de voz (ajustable)
+        const threshold = 30;
+        const isSpeaking = average > threshold;
+        
+        setSpeakingUsers(prev => {
+          const newSet = new Set(prev);
+          if (isSpeaking) {
+            newSet.add(speakerId);
+          } else {
+            newSet.delete(speakerId);
+          }
+          return newSet;
+        });
+        
+        animationFrameRef.current = requestAnimationFrame(detectSpeaking);
+      };
+      
+      detectSpeaking();
+    } catch (err) {
+      console.error('Error al configurar detección de audio:', err);
+    }
+  };
 
   useEffect(() => {
     if (!meetingId || !userId) return;
@@ -81,6 +133,9 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
 
             console.log('🎤 Stream de audio obtenido');
 
+            // Configurar análisis de audio local para detectar cuando hablo
+            setupAudioDetection(stream, userId);
+
             // Unirse a la reunión
             console.log('📤 Emitiendo join-meeting:', { meetingId, userId });
             voiceSocket.emit('join-meeting', meetingId, userId);
@@ -132,6 +187,8 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
               console.log('🔊 Stream remoto recibido de:', remoteUserId);
               console.log('🎵 Tracks de audio:', remoteStream.getAudioTracks().length);
               playRemoteStream(remoteStream, remoteUserId);
+              // Configurar detección de audio para el stream remoto
+              setupAudioDetection(remoteStream, remoteUserId);
             });
 
             peer.on('error', (err) => {
@@ -180,6 +237,8 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
             peer.on('stream', (remoteStream) => {
               console.log('🔊 Stream remoto recibido de:', from);
               playRemoteStream(remoteStream, from);
+              // Configurar detección de audio para el stream remoto
+              setupAudioDetection(remoteStream, from);
             });
 
             peer.on('error', (err) => {
@@ -245,6 +304,14 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
       console.log('🔌 Limpiando conexión de voz...');
       isInitializingRef.current = false;
       
+      // Detener análisis de audio
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+      if (audioContextRef.current) {
+        audioContextRef.current.close();
+      }
+      
       // Detener tracks locales
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
@@ -293,6 +360,7 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
   return {
     isConnected,
     error,
-    peers: Array.from(peers.values())
+    peers: Array.from(peers.values()),
+    speakingUsers: Array.from(speakingUsers)
   };
 }

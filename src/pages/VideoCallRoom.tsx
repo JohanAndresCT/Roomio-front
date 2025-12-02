@@ -84,7 +84,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const socketRef = useRef<any>(null);
 
   // 🎤 Hook para manejar la conexión de voz
-  const { isConnected: isVoiceConnected, error: voiceError, peers: voicePeers } = useVoiceCall({
+  const { isConnected: isVoiceConnected, error: voiceError, peers: voicePeers, speakingUsers } = useVoiceCall({
     meetingId: meetingId,
     userId: user?.uid || '',
     enabled: isMicOn
@@ -289,10 +289,12 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           participants.length <= 6 ? 'grid-cols-2 lg:grid-cols-3' :
           'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
         }`}>
-          {participants.map((participant) => (
+          {participants.map((participant) => {
+            const isSpeaking = speakingUsers.includes(participant.id);
+            return (
             <div
               key={participant.id}
-              className={`participant-card ${participant.isSpeaking ? 'participant-speaking' : ''}`}
+              className={`participant-card ${isSpeaking ? 'participant-speaking' : ''}`}
               role="group"
               aria-label={`Video de ${participant.name}`}
             >
@@ -331,7 +333,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
                         <MicOff className="w-3 h-3 text-white" aria-hidden="true" />
                       </div>
                     )}
-                    {participant.isSpeaking && !participant.isMuted && (
+                    {isSpeaking && !participant.isMuted && (
                       <div className="voice-indicator">
                         <span className="voice-bar"></span>
                         <span className="voice-bar voice-bar-delay-1"></span>
@@ -342,7 +344,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </main>
 
