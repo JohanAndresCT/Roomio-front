@@ -39,16 +39,13 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
         console.log('🎤 Iniciando conexión de voz...');
         console.log('🌐 URL del servidor:', import.meta.env.VITE_VOICE_SERVER_URL);
 
-        // Obtener configuración ICE del servidor primero
-        console.log('📡 Obteniendo configuración ICE...');
-        const response = await fetch(`${import.meta.env.VITE_VOICE_SERVER_URL || 'https://roomio-voice-service.onrender.com'}/voice-config`);
-        
-        if (!response.ok) {
-          throw new Error(`Error al obtener config ICE: ${response.status} ${response.statusText}`);
-        }
-        
-        const { iceServers } = await response.json();
-        console.log('🌐 ICE Servers configurados:', iceServers);
+        // Configuración ICE hardcodeada (temporal hasta que el backend esté arreglado)
+        const iceServers = [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" },
+          { urls: "stun:stun2.l.google.com:19302" },
+        ];
+        console.log('🌐 ICE Servers configurados (hardcoded):', iceServers);
 
         // Conectar al servidor de voz
         console.log('🔌 Conectando al servidor de voz...');
