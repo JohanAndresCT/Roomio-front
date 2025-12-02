@@ -233,11 +233,13 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
             }
             
             // For all participants (including current user if no local changes), use backend state
+            // But preserve existing media state if backend doesn't provide it
             return {
               id: p.userId,
               name: p.userName,
-              isMuted: p.isMuted ?? true,
-              isVideoOff: p.isVideoOff ?? true,
+              // Use backend state if available, otherwise keep existing state
+              isMuted: p.isMuted !== undefined ? p.isMuted : (existingParticipant?.isMuted ?? true),
+              isVideoOff: p.isVideoOff !== undefined ? p.isVideoOff : (existingParticipant?.isVideoOff ?? true),
               isSpeaking: existingParticipant?.isSpeaking ?? false,
               photoURL: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null),
             };
