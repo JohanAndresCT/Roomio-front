@@ -18,6 +18,8 @@ export default async () => {
     define: {
       // Define global para compatibilidad con librerías que lo necesitan (como simple-peer)
       global: 'globalThis',
+      // Define process.env para librerías que lo necesitan
+      'process.env': {}
     },
     server: {
       // listen on all interfaces (IPv4 + IPv6) so localhost / 127.0.0.1 work reliably
