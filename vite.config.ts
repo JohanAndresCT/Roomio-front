@@ -1,4 +1,5 @@
 import { defineConfig } from 'vite'
+import { nodePolyfills } from 'vite-plugin-node-polyfills'
 
 // Load plugins dynamically to avoid ESM/CommonJS loader mismatch on some environments
 export default async () => {
@@ -13,6 +14,10 @@ export default async () => {
   return defineConfig({
     plugins: [
       react(),
+      nodePolyfills({
+        // Whether to polyfill `node:` protocol imports.
+        protocolImports: true,
+      }),
       ...(tsconfigPaths ? [tsconfigPaths()] : [])
     ],
     define: {

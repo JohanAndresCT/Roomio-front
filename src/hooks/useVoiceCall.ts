@@ -103,37 +103,54 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
             return;
           }
 
-          // Crear peer como initiator
-          const peer = new Peer({
-            initiator: true,
-            trickle: false,
-            stream: localStreamRef.current,
-            config: { iceServers }
-          });
+          // No crear peer si es el mismo usuario
+          if (remoteUserId === userId) {
+            console.log('⚠️ No crear peer conmigo mismo');
+            return;
+          }
 
-          peer.on('signal', (signalData) => {
-            console.log('📤 Enviando señal a:', remoteUserId);
-            console.log('📦 Datos de señal:', signalData.type);
-            voiceSocket.emit('signal', {
-              to: remoteUserId,
-              from: userId,
-              signalData
+          try {
+            // Crear peer como initiator
+            const peer = new Peer({
+              initiator: true,
+              trickle: false,
+              stream: localStreamRef.current,
+              config: { iceServers }
             });
-          });
 
-          peer.on('stream', (remoteStream) => {
-            console.log('🔊 Stream remoto recibido de:', remoteUserId);
-            console.log('🎵 Tracks de audio:', remoteStream.getAudioTracks().length);
-            playRemoteStream(remoteStream, remoteUserId);
-          });
+            peer.on('signal', (signalData) => {
+              console.log('📤 Enviando señal a:', remoteUserId);
+              console.log('📦 Datos de señal:', signalData.type);
+              voiceSocket.emit('signal', {
+                to: remoteUserId,
+                from: userId,
+                signalData
+              });
+            });
 
-          peer.on('error', (err) => {
-            console.error('❌ Error en peer:', err);
-          });
+            peer.on('stream', (remoteStream) => {
+              console.log('🔊 Stream remoto recibido de:', remoteUserId);
+              console.log('🎵 Tracks de audio:', remoteStream.getAudioTracks().length);
+              playRemoteStream(remoteStream, remoteUserId);
+            });
 
-          const peerObj: PeerConnection = { peer, userId: remoteUserId };
-          peersRef.current.set(remoteUserId, peerObj);
-          setPeers(new Map(peersRef.current));
+            peer.on('error', (err) => {
+              console.error('❌ Error en peer:', err);
+            });
+
+            peer.on('close', () => {
+              console.log('🔌 Peer cerrado:', remoteUserId);
+            });
+
+            const peerObj: PeerConnection = { peer, userId: remoteUserId };
+            peersRef.current.set(remoteUserId, peerObj);
+            setPeers(new Map(peersRef.current));
+            
+            console.log('✅ Peer creado para:', remoteUserId);
+            console.log('📊 Total peers:', peersRef.current.size);
+          } catch (err) {
+            console.error('❌ Error al crear peer:', err);
+          }
         });
 
         // Cuando recibimos una señal
