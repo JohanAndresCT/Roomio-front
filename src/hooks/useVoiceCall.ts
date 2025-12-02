@@ -2,17 +2,57 @@ import { useEffect, useRef, useState } from 'react';
 import { io, Socket } from 'socket.io-client';
 import Peer from 'simple-peer';
 
+/**
+ * Props for the useVoiceCall hook.
+ * @interface UseVoiceCallProps
+ * @property {string} meetingId - Unique identifier for the meeting room.
+ * @property {string} userId - Unique identifier for the current user.
+ * @property {boolean} enabled - Whether the microphone is enabled/unmuted.
+ */
 interface UseVoiceCallProps {
   meetingId: string;
   userId: string;
-  enabled: boolean; // Si el micrófono está habilitado
+  enabled: boolean;
 }
 
+/**
+ * Represents a peer-to-peer connection with another user.
+ * @interface PeerConnection
+ * @property {Peer.Instance} peer - SimplePeer instance for WebRTC connection.
+ * @property {string} userId - User ID of the remote peer.
+ */
 interface PeerConnection {
   peer: Peer.Instance;
   userId: string;
 }
 
+/**
+ * Custom hook for managing WebRTC voice connections in a video call.
+ * 
+ * This hook handles:
+ * - WebRTC peer-to-peer connections using SimplePeer
+ * - Voice activity detection using Web Audio API
+ * - Socket.io signaling for connection establishment
+ * - Microphone state management (mute/unmute)
+ * 
+ * @param {UseVoiceCallProps} props - Hook configuration parameters.
+ * @param {string} props.meetingId - Meeting room identifier.
+ * @param {string} props.userId - Current user identifier.
+ * @param {boolean} props.enabled - Microphone enabled state.
+ * 
+ * @returns {Object} Voice call state and utilities.
+ * @returns {boolean} isConnected - Whether connected to voice server.
+ * @returns {string | null} error - Error message if connection failed.
+ * @returns {PeerConnection[]} peers - Array of active peer connections.
+ * @returns {string[]} speakingUsers - Array of user IDs currently speaking.
+ * 
+ * @example
+ * const { isConnected, error, peers, speakingUsers } = useVoiceCall({
+ *   meetingId: 'MTG-001',
+ *   userId: 'user123',
+ *   enabled: isMicOn
+ * });
+ */
 export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) {
   const [isConnected, setIsConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +67,16 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
   const analyserRef = useRef<AnalyserNode | null>(null);
   const animationFrameRef = useRef<number | null>(null);
 
-  // Función para detectar actividad de voz
+  /**
+   * usability story HU-005: Visual Voice Detection
+   * 
+   * Sets up audio analysis to detect when a user is speaking.
+   * Uses Web Audio API to analyze audio frequency data and determine
+   * if the volume exceeds the speaking threshold.
+   * 
+   * @param {MediaStream} stream - Audio stream to analyze.
+   * @param {string} speakerId - User ID of the speaker.
+   */
   const setupAudioDetection = (stream: MediaStream, speakerId: string) => {
     try {
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -40,7 +89,7 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
       
       microphone.connect(analyser);
       
-      // Guardar referencias
+      // Save references for cleanup later
       if (speakerId === userId) {
         audioContextRef.current = audioContext;
         analyserRef.current = analyser;
@@ -49,10 +98,10 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
       const detectSpeaking = () => {
         analyser.getByteFrequencyData(dataArray);
         
-        // Calcular volumen promedio
+        // Calculate average volume
         const average = dataArray.reduce((a, b) => a + b) / bufferLength;
         
-        // Umbral de detección de voz (ajustable)
+        // HU-005: Voice detection threshold (adjustable)
         const threshold = 30;
         const isSpeaking = average > threshold;
         
@@ -78,29 +127,39 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
   useEffect(() => {
     if (!meetingId || !userId) return;
     
-    // Prevenir doble inicialización
+    // Prevent double initialization
     if (isInitializingRef.current) {
-      console.log('⚠️ Ya hay una inicialización en curso');
+      console.log('⚠️ Initialization already in progress');
       return;
     }
 
+    /**
+     * Initializes WebRTC voice connection.
+     * 
+     * Steps:
+     * 1. Connect to Socket.io voice server
+     * 2. Request microphone access
+     * 3. Set up audio detection
+     * 4. Join meeting room
+     * 5. Listen for peer connection events
+     */
     const initVoiceConnection = async () => {
       isInitializingRef.current = true;
       
       try {
-        console.log('🎤 Iniciando conexión de voz...');
-        console.log('🌐 URL del servidor:', import.meta.env.VITE_VOICE_SERVER_URL);
+        console.log('🎤 Starting voice connection...');
+        console.log('🌐 Server URL:', import.meta.env.VITE_VOICE_SERVER_URL);
 
-        // Configuración ICE hardcodeada (temporal hasta que el backend esté arreglado)
+        // ICE configuration (hardcoded until backend is fixed)
         const iceServers = [
           { urls: "stun:stun.l.google.com:19302" },
           { urls: "stun:stun1.l.google.com:19302" },
           { urls: "stun:stun2.l.google.com:19302" },
         ];
-        console.log('🌐 ICE Servers configurados (hardcoded):', iceServers);
+        console.log('🌐 ICE Servers configured (hardcoded):', iceServers);
 
-        // Conectar al servidor de voz
-        console.log('🔌 Conectando al servidor de voz...');
+        // Connect to voice server
+        console.log('🔌 Connecting to voice server...');
         const voiceSocket = io(import.meta.env.VITE_VOICE_SERVER_URL || 'https://roomio-voice-service.onrender.com', {
           transports: ['websocket'],
           reconnection: true,
@@ -109,12 +168,12 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
         });
         socketRef.current = voiceSocket;
 
-        // Registrar listeners de socket
+        // Register socket event listeners
         voiceSocket.on('connect', async () => {
-          console.log('✅ Conectado al servidor de voz');
+          console.log('✅ Connected to voice server');
           setIsConnected(true);
 
-          // Obtener stream de audio local
+          // Get local audio stream
           try {
             const stream = await navigator.mediaDevices.getUserMedia({ 
               audio: {
@@ -126,18 +185,18 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
             });
             localStreamRef.current = stream;
             
-            // Mutear/desmutear según el estado inicial
+            // Mute/unmute according to initial state
             stream.getAudioTracks().forEach(track => {
               track.enabled = enabled;
             });
 
-            console.log('🎤 Stream de audio obtenido');
+            console.log('🎤 Audio stream obtained');
 
-            // Configurar análisis de audio local para detectar cuando hablo
+            // Set up local audio analysis to detect when I speak
             setupAudioDetection(stream, userId);
 
-            // Unirse a la reunión
-            console.log('📤 Emitiendo join-meeting:', { meetingId, userId });
+            // Join the meeting
+            console.log('📤 Emitting join-meeting:', { meetingId, userId });
             voiceSocket.emit('join-meeting', meetingId, userId);
             
             console.log('✅ join-meeting emitido, esperando evento user-connected...');
@@ -147,25 +206,25 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
           }
         });
 
-        // Cuando un nuevo usuario se conecta
+        // When a new user connects
         voiceSocket.on('user-connected', (remoteUserId: string) => {
-          console.log('👤 Usuario conectado:', remoteUserId);
-          console.log('Mi userId:', userId);
-          console.log('¿Tengo stream local?:', !!localStreamRef.current);
+          console.log('👤 User connected:', remoteUserId);
+          console.log('My userId:', userId);
+          console.log('Do I have local stream?:', !!localStreamRef.current);
           
           if (!localStreamRef.current) {
-            console.warn('⚠️ No hay stream local, no se puede crear peer');
+            console.warn('⚠️ No local stream, cannot create peer');
             return;
           }
 
-          // No crear peer si es el mismo usuario
+          // Don't create peer if it's the same user
           if (remoteUserId === userId) {
-            console.log('⚠️ No crear peer conmigo mismo');
+            console.log('⚠️ Not creating peer with myself');
             return;
           }
 
           try {
-            // Crear peer como initiator
+            // Create peer as initiator
             const peer = new Peer({
               initiator: true,
               trickle: false,
@@ -184,10 +243,10 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
             });
 
             peer.on('stream', (remoteStream) => {
-              console.log('🔊 Stream remoto recibido de:', remoteUserId);
-              console.log('🎵 Tracks de audio:', remoteStream.getAudioTracks().length);
+              console.log('🔊 Remote stream received from:', remoteUserId);
+              console.log('🎵 Audio tracks:', remoteStream.getAudioTracks().length);
               playRemoteStream(remoteStream, remoteUserId);
-              // Configurar detección de audio para el stream remoto
+              // Set up audio detection for remote stream
               setupAudioDetection(remoteStream, remoteUserId);
             });
 
@@ -210,14 +269,14 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
           }
         });
 
-        // Cuando recibimos una señal
+        // When we receive a signal
         voiceSocket.on('signal', ({ from, signalData }: { from: string; signalData: any }) => {
           console.log('📥 Señal recibida de:', from);
           
           let peer = peersRef.current.get(from)?.peer;
 
           if (!peer && localStreamRef.current) {
-            // Crear peer como receptor
+            // Create peer as receiver
             peer = new Peer({
               initiator: false,
               trickle: false,
@@ -255,9 +314,9 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
           }
         });
 
-        // Cuando un usuario se desconecta
+        // When a user disconnects
         voiceSocket.on('user-disconnected', (disconnectedUserId: string) => {
-          console.log('👋 Usuario desconectado:', disconnectedUserId);
+          console.log('👋 User disconnected:', disconnectedUserId);
           const peerObj = peersRef.current.get(disconnectedUserId);
           if (peerObj) {
             peerObj.peer.destroy();
@@ -265,7 +324,7 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
             setPeers(new Map(peersRef.current));
           }
           
-          // Remover elemento de audio
+          // Remove audio element
           const audioElement = document.getElementById(`audio-${disconnectedUserId}`) as HTMLAudioElement;
           if (audioElement) {
             audioElement.remove();
@@ -286,8 +345,8 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
           isInitializingRef.current = false;
         });
 
-        // Inicialización exitosa
-        console.log('✅ Hook de voz inicializado correctamente');
+        // Successful initialization
+        console.log('✅ Voice hook initialized correctly');
 
       } catch (err: any) {
         console.error('❌ Error al inicializar voz (catch):', err);
@@ -301,10 +360,10 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
     initVoiceConnection();
 
     return () => {
-      console.log('🔌 Limpiando conexión de voz...');
+      console.log('🔌 Cleaning up voice connection...');
       isInitializingRef.current = false;
       
-      // Detener análisis de audio
+      // Stop audio analysis
       if (animationFrameRef.current) {
         cancelAnimationFrame(animationFrameRef.current);
       }
@@ -312,39 +371,45 @@ export function useVoiceCall({ meetingId, userId, enabled }: UseVoiceCallProps) 
         audioContextRef.current.close();
       }
       
-      // Detener tracks locales
+      // Stop local tracks
       if (localStreamRef.current) {
         localStreamRef.current.getTracks().forEach(track => track.stop());
       }
 
-      // Destruir todos los peers
+      // Destroy all peers
       peersRef.current.forEach(({ peer }) => {
         peer.destroy();
       });
       peersRef.current.clear();
 
-      // Desconectar socket
+      // Disconnect socket
       if (socketRef.current) {
         socketRef.current.disconnect();
       }
 
-      // Remover todos los elementos de audio
+      // Remove all audio elements
       document.querySelectorAll('[id^="audio-"]').forEach(el => el.remove());
     };
   }, [meetingId, userId]);
 
-  // Efecto para mutear/desmutear cuando cambia el estado
+  // Effect to mute/unmute when state changes
   useEffect(() => {
     if (localStreamRef.current) {
       localStreamRef.current.getAudioTracks().forEach(track => {
         track.enabled = enabled;
       });
-      console.log(enabled ? '🔊 Micrófono activado' : '🔇 Micrófono silenciado');
+      console.log(enabled ? '🔊 Microphone enabled' : '🔇 Microphone muted');
     }
   }, [enabled]);
 
+  /**
+   * Creates and plays an HTML audio element for a remote stream.
+   * 
+   * @param {MediaStream} stream - Remote audio stream to play.
+   * @param {string} userId - User ID for the audio element.
+   */
   const playRemoteStream = (stream: MediaStream, userId: string) => {
-    // Crear elemento de audio para el stream remoto
+    // Create audio element for remote stream
     let audioElement = document.getElementById(`audio-${userId}`) as HTMLAudioElement;
     
     if (!audioElement) {

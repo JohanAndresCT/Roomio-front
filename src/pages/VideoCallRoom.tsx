@@ -62,7 +62,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const location = useLocation();
   const meetingId = params.meetingId || 'MTG-001';
   const { user } = useAuth();
-  // Ya no se obtiene el nombre de la reunión desde la query
+  // Meeting name is no longer retrieved from query
 
   const [currentTime, setCurrentTime] = useState(() => {
     return DateTime.now().setZone('America/Bogota').toFormat('HH:mm:ss');
@@ -83,14 +83,15 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const [participants, setParticipants] = useState<Participant[]>([]);
   const socketRef = useRef<any>(null);
 
-  // 🎤 Hook para manejar la conexión de voz
+  // usability story HU-007: Voice Connection Indicator
+  // Hook to manage WebRTC voice connection
   const { isConnected: isVoiceConnected, error: voiceError, peers: voicePeers, speakingUsers } = useVoiceCall({
     meetingId: meetingId,
     userId: user?.uid || '',
     enabled: isMicOn
   });
 
-  // Mostrar estado de conexión de voz
+  // HU-007: Display voice connection status in console
   useEffect(() => {
     if (isVoiceConnected) {
       console.log('✅ Voz conectada. Peers activos:', voicePeers.length);
@@ -101,23 +102,23 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   }, [isVoiceConnected, voiceError, voicePeers]);
 
   useEffect(() => {
-    // Si ya hay una conexión activa, no crear otra
+    // If there's already an active connection, don't create another
     if (socketRef.current?.connected) {
-      console.log("⚠️ Socket ya conectado, saltando reconexión");
+      console.log("⚠️ Socket already connected, skipping reconnection");
       return;
     }
 
     if (!user) {
-      console.log("⚠️ No hay usuario, esperando...");
+      console.log("⚠️ No user, waiting...");
       return;
     }
 
-    console.log("🔌 Iniciando conexión de socket para:", user.uid);
+    console.log("🔌 Initiating socket connection for:", user.uid);
 
-    // Inicializar con el usuario actual mientras conecta
+    // Initialize with current user while connecting
     setParticipants([{
       id: user.uid,
-      name: user.displayName || 'Tú',
+      name: user.displayName || 'You',
       isMuted: false,
       isVideoOff: true,
       isSpeaking: false,
@@ -125,7 +126,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     }]);
 
     const connectSocket = async () => {
-      // Obtener token de Firebase
+      // Get Firebase token
       let token = '';
       try {
         const { getAuth } = await import('firebase/auth');
@@ -135,10 +136,10 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           token = await currentUser.getIdToken();
         }
       } catch (err) {
-        console.error("Error al obtener token:", err);
+        console.error("Error getting token:", err);
       }
 
-      console.log("Conectando al servidor de sockets...");
+      console.log("Connecting to socket server...");
       console.log("URL:", import.meta.env.VITE_CHAT_SERVER_URL || 'https://roomio-chat-service.onrender.com');
       console.log("meetingId:", meetingId, "uid:", user?.uid);
 
@@ -151,42 +152,44 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       socketRef.current = socket;
 
       socket.on('connect', () => {
-        console.log("Conectado al servidor de sockets");
-        // Unirse a la reunión después de conectar con información del usuario
-        console.log("Emitiendo join-meeting para:", meetingId);
-        console.log("Datos del usuario:", {
+        console.log("Connected to socket server");
+        // Join meeting after connecting with user information
+        console.log("Emitting join-meeting for:", meetingId);
+        console.log("User data:", {
           uid: user?.uid,
           displayName: user?.displayName,
           photoURL: user?.photoURL
         });
         socket.emit('join-meeting', {
           meetingId,
-          photoURL: user?.photoURL || null
+          photoURL: user?.photoURL || null,
+          isMuted: !isMicOn,
+          isVideoOff: !isVideoOn
         });
       });
 
       socket.on('connect_error', (error) => {
-        console.error("Error de conexión:", error);
+        console.error("Connection error:", error);
       });
 
-      // Escuchar actualizaciones del array completo de participantes
+      // Listen for updates to the complete participants array
       socket.on('participants', (list: any[]) => {
         console.log("=== EVENTO PARTICIPANTS RECIBIDO ===");
         console.log("Lista de participantes recibida del backend:", JSON.stringify(list, null, 2));
         console.log("Total recibido del backend:", list.length);
         
         if (!list || list.length === 0) {
-          console.warn("Lista de participantes vacía, manteniendo usuario actual");
+          console.warn("Empty participants list, keeping current user");
           return;
         }
         
         setParticipants(prevParticipants => {
           const updatedList = list.map((p: any) => {
-            // Si es el usuario actual, preservar estados locales
+            // If it's the current user, preserve local states
             const isCurrentUser = p.userId === user?.uid;
             const existingParticipant = prevParticipants.find(prev => prev.id === p.userId);
             
-            console.log(`Procesando participante: ${p.userName} (${p.userId})`, {
+            console.log(`Processing participant: ${p.userName} (${p.userId})`, {
               isCurrentUser,
               photoURL: p.photoURL,
               willUsePhoto: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null)
@@ -195,16 +198,16 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
             return {
               id: p.userId,
               name: p.userName,
-              // Si es el usuario actual y ya existe, preservar sus estados locales
-              isMuted: isCurrentUser && existingParticipant ? existingParticipant.isMuted : false,
-              isVideoOff: isCurrentUser && existingParticipant ? existingParticipant.isVideoOff : true,
+              // Use backend state if available, otherwise default values
+              isMuted: p.isMuted !== undefined ? p.isMuted : (isCurrentUser ? !isMicOn : true),
+              isVideoOff: p.isVideoOff !== undefined ? p.isVideoOff : true,
               isSpeaking: false,
               photoURL: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null),
             };
           });
           
-          console.log("Lista final de participantes:", updatedList);
-          console.log("Número de participantes FINAL:", updatedList.length);
+          console.log("Final participants list:", updatedList);
+          console.log("FINAL number of participants:", updatedList.length);
           return updatedList;
         });
       });
@@ -216,43 +219,70 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       socket.on('user-left', (payload: any) => {
         console.log("=== EVENTO USER-LEFT ===", payload);
       });
+
+      // HU-006: Listen for media state changes (mic/camera)
+      socket.on('media-state-updated', ({ userId, isMuted, isVideoOff }: any) => {
+        console.log(`📡 Media state updated: ${userId}`, { isMuted, isVideoOff });
+        setParticipants(prev => prev.map(p => 
+          p.id === userId ? { ...p, isMuted, isVideoOff } : p
+        ));
+      });
     };
 
     connectSocket();
 
     return () => {
-      console.log("🔌 Desconectando socket...");
+      console.log("🔌 Disconnecting socket...");
       if (socketRef.current) {
         socketRef.current.disconnect();
         socketRef.current = null;
       }
     };
-  }, [meetingId, user?.uid]); // Solo reconectar si cambia el meetingId o el uid del usuario
+  }, [meetingId, user?.uid]); // Only reconnect if meetingId or user uid changes
 
+  // usability story HU-006: Microphone State Synchronization
   const handleMicToggle = () => {
     const newMicState = !isMicOn;
     setIsMicOn(newMicState);
-    console.log(newMicState ? 'Cámara activada' : 'Cámara desactivada');
+    console.log(newMicState ? 'Microphone activated' : 'Microphone deactivated');
     
-    // Actualizar el estado del participante actual
+    // HU-006: Optimistic update of local state
     setParticipants(prev => prev.map(p => 
       p.id === user?.uid ? { ...p, isMuted: !newMicState } : p
     ));
+    
+    // HU-006: Synchronize state with all participants via Socket.io
+    if (socketRef.current) {
+      socketRef.current.emit('update-media-state', {
+        meetingId,
+        isMuted: !newMicState,
+        isVideoOff: !isVideoOn
+      });
+    }
   };
 
   const handleVideoToggle = () => {
     const newVideoState = !isVideoOn;
     setIsVideoOn(newVideoState);
-    console.log(newVideoState ? 'Cámara activada' : 'Cámara desactivada');
+    console.log(newVideoState ? 'Camera activated' : 'Camera deactivated');
     
-    // Actualizar el estado del participante actual
+    // Update current participant state
     setParticipants(prev => prev.map(p => 
       p.id === user?.uid ? { ...p, isVideoOff: !newVideoState } : p
     ));
+    
+    // Send state to backend to synchronize with other users
+    if (socketRef.current) {
+      socketRef.current.emit('update-media-state', {
+        meetingId,
+        isMuted: !isMicOn,
+        isVideoOff: !newVideoState
+      });
+    }
   };
 
   const handleLeaveCall = () => {
-    console.log('Has salido de la reunión');
+    console.log('You have left the meeting');
     onNavigate('dashboard');
   };
 
@@ -262,12 +292,12 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       <header className="video-call-header">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
           <div className="recording-indicator" aria-hidden="true"></div>
-          <span className="text-white text-xs sm:text-sm md:text-base truncate">Reunión en curso</span>
+          <span className="text-white text-xs sm:text-sm md:text-base truncate">Meeting in progress</span>
           <Badge variant="secondary" className="flex-shrink-0 text-xs px-1.5 py-0.5">
             <Users className="w-3 h-3 mr-1" aria-hidden="true" />
             {participants.length}
           </Badge>
-          {/* Ya no se muestra el nombre de la reunión */}
+          {/* Meeting name is no longer displayed */}
         </div>
         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
           <div className="flex items-center gap-1 sm:gap-1.5 text-xs sm:text-sm text-white">
@@ -290,22 +320,23 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
         }`}>
           {participants.map((participant) => {
+            // HU-005: Detect if participant is speaking
             const isSpeaking = speakingUsers.includes(participant.id);
             return (
             <div
               key={participant.id}
               className={`participant-card ${isSpeaking ? 'participant-speaking' : ''}`}
               role="group"
-              aria-label={`Video de ${participant.name}`}
+              aria-label={`Video of ${participant.name}`}
             >
-              {/* Video placeholder o avatar */}
+              {/* usability story HU-008: Profile Picture Visualization */}
               {participant.isVideoOff ? (
                 <div className="participant-video-off">
                   <div className="participant-avatar">
                     {participant.photoURL ? (
                       <img
                         src={participant.photoURL}
-                        alt={participant.id === user?.uid ? 'Tu foto de perfil' : `Foto de ${participant.name}`}
+                        alt={participant.id === user?.uid ? 'Your profile picture' : `${participant.name}'s picture`}
                       />
                     ) : (
                       <User className="text-muted-foreground" aria-hidden="true" />
@@ -314,9 +345,9 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
                 </div>
               ) : (
                 <div className="participant-video-on">
-                  {/* Simulación de video - en producción sería un elemento video real */}
+                  {/* Video simulation - in production would be a real video element */}
                   <div className="w-full h-full flex items-center justify-center">
-                    <span className="text-muted text-sm">[Video en vivo]</span>
+                    <span className="text-muted text-sm">[Live video]</span>
                   </div>
                 </div>
               )}
@@ -325,14 +356,16 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               <div className="participant-info">
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm truncate">
-                    {participant.id === user?.uid ? 'Tú' : participant.name}
+                    {participant.id === user?.uid ? 'You' : participant.name}
                   </span>
                   <div className="flex items-center gap-1 flex-shrink-0">
+                    {/* HU-006: Synchronized muted microphone indicator */}
                     {participant.isMuted && (
                       <div className="participant-muted-icon">
                         <MicOff className="w-3 h-3 text-white" aria-hidden="true" />
                       </div>
                     )}
+                    {/* HU-005: Active voice visual indicator */}
                     {isSpeaking && !participant.isMuted && (
                       <div className="voice-indicator">
                         <span className="voice-bar"></span>
@@ -354,7 +387,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         <div className="video-call-controls">
           {/* Left controls */}
           <div className="flex items-center gap-2">
-            {/* Espacio reservado */}
+            {/* Reserved space */}
           </div>
 
           {/* Center controls */}
@@ -364,7 +397,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               size="icon"
               className="control-button"
               onClick={handleMicToggle}
-              aria-label={isMicOn ? 'Desactivar micrófono' : 'Activar micrófono'}
+              aria-label={isMicOn ? 'Turn off microphone' : 'Turn on microphone'}
               aria-pressed={isMicOn}
             >
               {isMicOn ? (
@@ -379,7 +412,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               size="icon"
               className="control-button"
               onClick={handleVideoToggle}
-              aria-label={isVideoOn ? 'Desactivar cámara' : 'Activar cámara'}
+              aria-label={isVideoOn ? 'Turn off camera' : 'Turn on camera'}
               aria-pressed={isVideoOn}
             >
               {isVideoOn ? (
@@ -394,7 +427,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               size="icon"
               className="control-button relative"
               onClick={() => setIsChatOpen(!isChatOpen)}
-              aria-label="Abrir chat"
+              aria-label="Open chat"
               aria-pressed={isChatOpen}
             >
               <MessageSquare className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
@@ -405,9 +438,9 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               size="icon"
               className="control-button control-button-ai"
               onClick={() => setIsAISummaryOpen(!isAISummaryOpen)}
-              aria-label="Abrir resumen de IA"
+              aria-label="Open AI summary"
               aria-pressed={isAISummaryOpen}
-              title="Resumen de reunión por IA"
+              title="AI meeting summary"
             >
               <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
             </Button>
@@ -417,9 +450,9 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               size="icon"
               className="control-button"
               onClick={() => setIsAccessibilityOpen(!isAccessibilityOpen)}
-              aria-label="Abrir accesibilidad"
+              aria-label="Open accessibility"
               aria-pressed={isAccessibilityOpen}
-              title="Accesibilidad"
+              title="Accessibility"
             >
               <Contrast className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
             </Button>
@@ -429,7 +462,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               size="icon"
               className="control-button control-button-leave"
               onClick={handleLeaveCall}
-              aria-label="Salir de la reunión"
+              aria-label="Leave meeting"
             >
               <Phone className="w-4 h-4 sm:w-5 sm:h-5 rotate-135" aria-hidden="true" />
             </Button>
