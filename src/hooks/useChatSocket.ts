@@ -172,17 +172,28 @@ export function useChatSocket({ meetingId, userId, userName, token, serverUrl = 
     });
 
 
-    socket.on('user-joined', ({ userId, userName: joinedUserName }) => {
+    socket.on('user-joined', ({ userId: joinedUserId, userName: joinedUserName }) => {
+      console.log('📨 user-joined event received:', { joinedUserId, joinedUserName, myUserId: userId });
+      
+      // Don't show our own join message to avoid confusion
+      if (joinedUserId === userId) {
+        console.log('💬 Skipping own user-joined event');
+        return;
+      }
+      
+      console.log('✅ Adding user-joined event to chat');
       setEvents(ev => [
         ...ev,
-        { type: 'user-joined', userName: joinedUserName || userId, timestamp: new Date().toISOString() },
+        { type: 'user-joined', userName: joinedUserName || joinedUserId, timestamp: new Date().toISOString() },
       ]);
     });
 
     // Handle user-left event
     socket.on('user-left', (payload) => {
+      console.log('📨 user-left event received:', payload);
       // Si el backend envía userName, úsalo; si no, muestra el UID
       const name = payload.userName || payload.userId || payload.leftUserId;
+      console.log('✅ Adding user-left event to chat:', name);
       setEvents(ev => [
         ...ev,
         { type: 'user-left', userName: name, timestamp: new Date().toISOString() },
