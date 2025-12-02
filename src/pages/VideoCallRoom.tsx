@@ -73,8 +73,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       }, 1000);
       return () => clearInterval(interval);
     }, []);
-  const [isMicOn, setIsMicOn] = useState(true);
-  const [isVideoOn, setIsVideoOn] = useState(true);
+  const [isMicOn, setIsMicOn] = useState(false);
+  const [isVideoOn, setIsVideoOn] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isAccessibilityOpen, setIsAccessibilityOpen] = useState(false);
   const [isAISummaryOpen, setIsAISummaryOpen] = useState(false);
@@ -89,7 +89,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         id: user.uid,
         name: user.displayName || 'Tú',
         isMuted: false,
-        isVideoOff: false,
+        isVideoOff: true,
         isSpeaking: false,
         photoURL: user.photoURL || null,
       }]);
@@ -142,18 +142,27 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           return;
         }
         
-        const updatedList = list.map((p: any) => ({
-          id: p.userId,
-          name: p.userName,
-          isMuted: false,
-          isVideoOff: false,
-          isSpeaking: false,
-          photoURL: p.photoURL || null,
-        }));
-        
-        console.log("Lista final de participantes:", updatedList);
-        console.log("Número de participantes:", updatedList.length);
-        setParticipants(updatedList);
+        setParticipants(prevParticipants => {
+          const updatedList = list.map((p: any) => {
+            // Si es el usuario actual, preservar estados locales
+            const isCurrentUser = p.userId === user?.uid;
+            const existingParticipant = prevParticipants.find(prev => prev.id === p.userId);
+            
+            return {
+              id: p.userId,
+              name: p.userName,
+              // Si es el usuario actual y ya existe, preservar sus estados locales
+              isMuted: isCurrentUser && existingParticipant ? existingParticipant.isMuted : false,
+              isVideoOff: isCurrentUser && existingParticipant ? existingParticipant.isVideoOff : true,
+              isSpeaking: false,
+              photoURL: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null),
+            };
+          });
+          
+          console.log("Lista final de participantes:", updatedList);
+          console.log("Número de participantes:", updatedList.length);
+          return updatedList;
+        });
       });
 
       socket.on('user-joined', (payload: any) => {
@@ -175,13 +184,25 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   }, [meetingId, onNavigate, user]);
 
   const handleMicToggle = () => {
-    setIsMicOn(!isMicOn);
-    console.log(isMicOn ? 'Micrófono desactivado' : 'Micrófono activado');
+    const newMicState = !isMicOn;
+    setIsMicOn(newMicState);
+    console.log(newMicState ? 'Cámara activada' : 'Cámara desactivada');
+    
+    // Actualizar el estado del participante actual
+    setParticipants(prev => prev.map(p => 
+      p.id === user?.uid ? { ...p, isMuted: !newMicState } : p
+    ));
   };
 
   const handleVideoToggle = () => {
-    setIsVideoOn(!isVideoOn);
-    console.log(isVideoOn ? 'Cámara desactivada' : 'Cámara activada');
+    const newVideoState = !isVideoOn;
+    setIsVideoOn(newVideoState);
+    console.log(newVideoState ? 'Cámara activada' : 'Cámara desactivada');
+    
+    // Actualizar el estado del participante actual
+    setParticipants(prev => prev.map(p => 
+      p.id === user?.uid ? { ...p, isVideoOff: !newVideoState } : p
+    ));
   };
 
   const handleLeaveCall = () => {
@@ -237,10 +258,9 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
                       <img
                         src={participant.photoURL}
                         alt={participant.id === user?.uid ? 'Tu foto de perfil' : `Foto de ${participant.name}`}
-                        className="w-10 h-10 rounded-full object-cover"
                       />
                     ) : (
-                      <User className="w-10 h-10 text-muted-foreground" aria-hidden="true" />
+                      <User className="text-muted-foreground" aria-hidden="true" />
                     )}
                   </div>
                 </div>

@@ -733,13 +733,25 @@ footer[role="contentinfo"] .text-center {
 }
 
 .participant-avatar {
-  width: 5rem;
-  height: 5rem;
+  width: 8rem;
+  height: 8rem;
   background: #4A5568;
   border-radius: 9999px;
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  svg {
+    width: 4rem;
+    height: 4rem;
+  }
 }
 
 /* Video on state */
