@@ -200,41 +200,45 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
         
         setParticipants(prevParticipants => {
           const updatedList = list.map((p: any) => {
-            // If it's the current user, preserve local states to avoid race conditions
             const isCurrentUser = p.userId === user?.uid;
             const existingParticipant = prevParticipants.find(prev => prev.id === p.userId);
             
             console.log(`Processing participant: ${p.userName} (${p.userId})`, {
               isCurrentUser,
               photoURL: p.photoURL,
-              willUsePhoto: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null),
               backendMuted: p.isMuted,
               backendVideoOff: p.isVideoOff,
               existingMuted: existingParticipant?.isMuted,
               existingVideoOff: existingParticipant?.isVideoOff
             });
             
-            // For current user, preserve existing state to avoid race conditions
-            // Backend state will be updated via media-state-updated event
+            // For current user only: check if we have a pending local state change
+            // Only preserve if the local state is different from backend (indicates optimistic update)
             if (isCurrentUser && existingParticipant) {
-              console.log("🔒 Preserving current user local state");
-              return {
-                id: p.userId,
-                name: p.userName,
-                isMuted: existingParticipant.isMuted, // Keep local state
-                isVideoOff: existingParticipant.isVideoOff, // Keep local state
-                isSpeaking: existingParticipant.isSpeaking,
-                photoURL: user?.photoURL || p.photoURL || null,
-              };
+              const hasLocalChanges = 
+                existingParticipant.isMuted !== p.isMuted || 
+                existingParticipant.isVideoOff !== p.isVideoOff;
+              
+              if (hasLocalChanges) {
+                console.log("🔒 Current user has local changes, preserving for this update cycle");
+                return {
+                  id: p.userId,
+                  name: p.userName,
+                  isMuted: existingParticipant.isMuted,
+                  isVideoOff: existingParticipant.isVideoOff,
+                  isSpeaking: existingParticipant.isSpeaking,
+                  photoURL: user?.photoURL || p.photoURL || null,
+                };
+              }
             }
             
-            // For other participants, use backend state
+            // For all participants (including current user if no local changes), use backend state
             return {
               id: p.userId,
               name: p.userName,
               isMuted: p.isMuted ?? true,
               isVideoOff: p.isVideoOff ?? true,
-              isSpeaking: false,
+              isSpeaking: existingParticipant?.isSpeaking ?? false,
               photoURL: isCurrentUser && user?.photoURL ? user.photoURL : (p.photoURL || null),
             };
           });
@@ -257,15 +261,23 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           isCurrentUser,
           currentUserId: user?.uid 
         });
+        
+        // Update immediately - this has priority over participants event
         setParticipants(prev => {
           const updated = prev.map(p => 
             p.id === userId ? { ...p, isMuted, isVideoOff } : p
           );
-          console.log('Participants after media-state-updated:', updated);
-          if (isCurrentUser) {
-            const currentUserParticipant = updated.find(p => p.id === user?.uid);
-            console.log('✅ Current user participant after update:', currentUserParticipant);
+          console.log('✅ Participants after media-state-updated:', updated);
+          
+          // Find the updated participant to log
+          const updatedParticipant = updated.find(p => p.id === userId);
+          if (updatedParticipant) {
+            console.log(`✅ ${updatedParticipant.name} media state:`, {
+              isMuted: updatedParticipant.isMuted,
+              isVideoOff: updatedParticipant.isVideoOff
+            });
           }
+          
           return updated;
         });
       });
