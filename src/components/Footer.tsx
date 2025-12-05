@@ -21,9 +21,9 @@ export function Footer({ onNavigate }: FooterProps) {
   return (
     <footer className="bg-secondary border-t border-border mt-auto" role="contentinfo">
       <div className="max-w-7xl mx-auto px-6 sm:px-8 lg:px-12 py-12">
-        <div className="grid grid-cols-12 gap-12 items-start">
-          {/* Brand (col-span 4) */}
-          <div className="col-span-12 md:col-span-4">
+        <div className="flex flex-wrap justify-between gap-8 items-start">
+          {/* Brand */}
+          <div className="w-full md:w-auto md:flex-1 md:max-w-[300px]">
             <div className="flex items-center gap-3">
               <img src="/logo.png" alt="Roomio" className="w-14 h-14 object-contain brand-logo" />
               <div>
@@ -33,8 +33,8 @@ export function Footer({ onNavigate }: FooterProps) {
             </div>
           </div>
 
-          {/* Navigation (col-span 4) */}
-          <div className="col-span-12 sm:col-span-6 md:col-span-4">
+          {/* Navigation */}
+          <div className="w-full sm:w-auto md:flex-1 md:min-w-[200px]">
             <h3 className="mb-4 text-base font-semibold text-foreground">Navegación</h3>
             <ul className="space-y-4">
               <li>
@@ -55,8 +55,8 @@ export function Footer({ onNavigate }: FooterProps) {
             </ul>
           </div>
 
-          {/* Legal (col-span 2) */}
-          <div className="col-span-6 sm:col-span-6 md:col-span-2">
+          {/* Legal */}
+          <div className="w-1/2 sm:w-auto md:flex-1 md:min-w-[180px]">
             <h3 className="mb-4 text-base font-semibold text-foreground">Legal</h3>
             <ul className="space-y-3">
               <li>
@@ -68,8 +68,8 @@ export function Footer({ onNavigate }: FooterProps) {
             </ul>
           </div>
 
-          {/* Social (col-span 2) */}
-          <div className="col-span-6 sm:col-span-6 md:col-span-2">
+          {/* Social */}
+          <div className="w-1/2 sm:w-auto md:flex-1 md:min-w-[150px]">
             <h3 className="mb-4 text-base font-semibold text-foreground">Síguenos</h3>
             <div className="flex flex-wrap gap-2.5 sm:gap-3">
               {[['Twitter', Twitter], ['GitHub', Github], ['LinkedIn', Linkedin], ['Email', Mail]].map(([label, Icon], idx) => (

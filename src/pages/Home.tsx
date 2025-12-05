@@ -72,31 +72,36 @@ const Home: React.FC<HomeProps> = ({ onNavigate }) => {
                   Conocer más
                 </button>
               </div>
-
-              {/* Stats */}
-              <div className="grid grid-cols-3 gap-6 sm:gap-8 lg:gap-16 xl:gap-20 pt-2 sm:pt-4">
-                <div>
-                  <p className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-none mb-1 sm:mb-2">10+</p>
-                  <p className="text-sm sm:text-base lg:text-lg xl:text-xl text-gray-600">Participantes</p>
-                </div>
-                <div>
-                  <p className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-none mb-1 sm:mb-2">HD</p>
-                  <p className="text-sm sm:text-base lg:text-lg xl:text-xl text-gray-600">Calidad de video</p>
-                </div>
-                <div>
-                  <p className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-none mb-1 sm:mb-2">24/7</p>
-                  <p className="text-sm sm:text-base lg:text-lg xl:text-xl text-gray-600">Disponibilidad</p>
-                </div>
-              </div>
             </div>
 
-            {/* Right Column - Image */}
+            {/* Right Column - Video */}
             <div className="relative flex items-center justify-center lg:justify-end mt-6 lg:mt-0 lg:-mr-20">
-              <img
-                src="/meetingphoto.png"
-                alt="Equipo en una videollamada profesional"
+              <video
+                src="/meetvideo.mp4"
+                autoPlay
+                loop
+                muted
+                playsInline
                 className="w-full max-w-md sm:max-w-lg lg:max-w-2xl xl:max-w-3xl h-auto object-contain"
+                style={{ background: 'transparent' }}
+                aria-label="Demostración de videollamada en Roomio"
               />
+            </div>
+          </div>
+          
+          {/* Stats - Centered below */}
+          <div className="grid grid-cols-3 gap-6 sm:gap-8 lg:gap-16 xl:gap-20 pt-8 sm:pt-12 max-w-4xl mx-auto">
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-none mb-1 sm:mb-2">10+</p>
+              <p className="text-sm sm:text-base lg:text-lg xl:text-xl text-gray-600">Participantes</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-none mb-1 sm:mb-2">HD</p>
+              <p className="text-sm sm:text-base lg:text-lg xl:text-xl text-gray-600">Calidad de video</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-gray-900 leading-none mb-1 sm:mb-2">24/7</p>
+              <p className="text-sm sm:text-base lg:text-lg xl:text-xl text-gray-600">Disponibilidad</p>
             </div>
           </div>
         </div>
