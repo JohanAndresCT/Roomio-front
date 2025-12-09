@@ -126,12 +126,7 @@ export function useVideoCall({
       
       console.log('Local video stream started');
       
-      // Add tracks to existing peer connections
-      peersRef.current.forEach((peer) => {
-        stream.getTracks().forEach(track => {
-          peer.connection.addTrack(track, stream);
-        });
-      });
+      // Note: tracks will be added to peer connections during renegotiation
 
       return stream;
     } catch (err: any) {
@@ -187,8 +182,16 @@ export function useVideoCall({
         // Add new video tracks to all existing peer connections
         peersRef.current.forEach(async (peer, peerId) => {
           stream.getTracks().forEach(track => {
-            console.log(`Adding ${track.kind} track to existing peer ${peerId}`);
-            peer.connection.addTrack(track, stream);
+            // Check if this track is already being sent
+            const senders = peer.connection.getSenders();
+            const existingSender = senders.find(s => s.track?.id === track.id);
+            
+            if (!existingSender) {
+              console.log(`Adding ${track.kind} track to existing peer ${peerId}`);
+              peer.connection.addTrack(track, stream);
+            } else {
+              console.log(`Track ${track.kind} already exists for peer ${peerId}, skipping`);
+            }
           });
           
           // Renegotiate the connection
