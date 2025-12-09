@@ -54,6 +54,9 @@ export function useVideoCall({
    * Creates a new RTCPeerConnection with ICE servers
    */
   const createPeerConnection = useCallback((peerId: string): RTCPeerConnection => {
+    console.log(`[CREATE-PC] Creating peer connection for: ${peerId}`);
+    console.log(`[CREATE-PC] Current peer connections:`, Array.from(peersRef.current.keys()));
+    
     const config: RTCConfiguration = iceConfigRef.current || {
       iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
     };
@@ -238,8 +241,19 @@ export function useVideoCall({
   const createOffer = useCallback(async (peerId: string) => {
     try {
       console.log(`[OFFER] Creating offer for peer: ${peerId}`);
-      const pc = createPeerConnection(peerId);
-      peersRef.current.set(peerId, { connection: pc });
+      
+      // Check if peer connection already exists
+      let existingPeer = peersRef.current.get(peerId);
+      let pc: RTCPeerConnection;
+      
+      if (existingPeer) {
+        console.log(`[OFFER] Reusing existing connection for ${peerId} (renegotiation)`);
+        pc = existingPeer.connection;
+      } else {
+        console.log(`[OFFER] Creating new peer connection for ${peerId}`);
+        pc = createPeerConnection(peerId);
+        peersRef.current.set(peerId, { connection: pc });
+      }
 
       const offer = await pc.createOffer({
         offerToReceiveAudio: false,
@@ -315,11 +329,12 @@ export function useVideoCall({
       console.log(`[ANSWER] Received video offer from: ${from}`);
       try {
         // Check if we already have a connection with this peer
-        let pc = peersRef.current.get(from)?.connection;
+        let existingPeer = peersRef.current.get(from);
+        let pc: RTCPeerConnection;
         
-        if (pc) {
-          console.log(`[ANSWER] Existing connection found for ${from}, renegotiating`);
-          // Renegotiation - just update the remote description
+        if (existingPeer) {
+          console.log(`[ANSWER] Reusing existing connection for ${from} (renegotiation)`);
+          pc = existingPeer.connection;
         } else {
           console.log(`[ANSWER] Creating new connection for ${from}`);
           pc = createPeerConnection(from);
