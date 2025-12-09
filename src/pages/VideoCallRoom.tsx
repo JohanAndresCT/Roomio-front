@@ -105,10 +105,25 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     enabled: true // Always enabled to allow toggle
   });
 
-  // Sync video state with local UI state
+  // Sync video state with local UI state and backend
   useEffect(() => {
     setIsVideoOn(isVideoEnabled);
-  }, [isVideoEnabled]);
+    
+    // Sync with backend when video state changes
+    if (socket?.connected) {
+      console.log('📹 Video state changed, syncing with backend:', isVideoEnabled);
+      socket.emit('update-media-state', {
+        meetingId,
+        isMuted: !isMicOn,
+        isVideoOff: !isVideoEnabled
+      });
+      
+      // Update local participant state
+      setParticipants(prev => prev.map(p => 
+        p.id === user?.uid ? { ...p, isVideoOff: !isVideoEnabled } : p
+      ));
+    }
+  }, [isVideoEnabled, socket, meetingId, isMicOn, user?.uid]);
 
   // HU-007: Display voice connection status in console
   useEffect(() => {
@@ -369,33 +384,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
 
   const handleVideoToggle = async () => {
     console.log('📹 Toggling camera...');
-    
-    // Toggle video using the hook
+    // Toggle video using the hook - the useEffect will handle backend sync
     await toggleVideo();
-    
-    const newVideoState = !isVideoOn;
-    console.log(newVideoState ? '📹 Camera activated' : '🚫 Camera deactivated');
-    console.log('Emitting update-media-state:', { 
-      meetingId, 
-      isMuted: !isMicOn, 
-      isVideoOff: !newVideoState 
-    });
-    
-    // Update current participant state
-    setParticipants(prev => prev.map(p => 
-      p.id === user?.uid ? { ...p, isVideoOff: !newVideoState } : p
-    ));
-    
-    // Send state to backend to synchronize with other users
-    if (socket?.connected) {
-      socket.emit('update-media-state', {
-        meetingId,
-        isMuted: !isMicOn,
-        isVideoOff: !newVideoState
-      });
-    } else {
-      console.error('❌ Socket not connected, cannot send media state update');
-    }
   };
 
   const handleLeaveCall = () => {
