@@ -341,6 +341,18 @@ export function useVideoCall({
           peersRef.current.set(from, { connection: pc });
         }
 
+        // IMPORTANT: Add our local tracks if we have them (for renegotiation)
+        if (localStreamRef.current) {
+          const existingSenders = pc.getSenders();
+          localStreamRef.current.getTracks().forEach(track => {
+            const existingSender = existingSenders.find(s => s.track?.id === track.id);
+            if (!existingSender) {
+              console.log(`[ANSWER] Adding our ${track.kind} track to connection with ${from}`);
+              pc.addTrack(track, localStreamRef.current!);
+            }
+          });
+        }
+
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         console.log(`[ANSWER] Set remote description from ${from}`);
         
