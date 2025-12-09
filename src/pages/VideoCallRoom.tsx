@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../hooks/useAuth';
 import { useVoiceCall } from '../hooks/useVoiceCall';
+import { useVideoCall } from '../hooks/useVideoCall';
 import { io } from 'socket.io-client';
 import { useParams, useLocation } from 'react-router-dom';
 import { DateTime } from "luxon";
@@ -91,6 +92,24 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     enabled: isMicOn
   });
 
+  // Hook to manage WebRTC video connection
+  const { 
+    localStream: videoLocalStream, 
+    remoteStreams: videoRemoteStreams, 
+    isVideoEnabled, 
+    toggleVideo,
+    error: videoError 
+  } = useVideoCall({
+    meetingId: meetingId,
+    userId: user?.uid || '',
+    enabled: true // Always enabled to allow toggle
+  });
+
+  // Sync video state with local UI state
+  useEffect(() => {
+    setIsVideoOn(isVideoEnabled);
+  }, [isVideoEnabled]);
+
   // HU-007: Display voice connection status in console
   useEffect(() => {
     if (isVoiceConnected) {
@@ -100,6 +119,13 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       console.error('❌ Error de voz:', voiceError);
     }
   }, [isVoiceConnected, voiceError, voicePeers]);
+
+  // Display video errors
+  useEffect(() => {
+    if (videoError) {
+      console.error('❌ Error de video:', videoError);
+    }
+  }, [videoError]);
 
   useEffect(() => {
     // If there's already an active connection, don't create another
@@ -341,9 +367,13 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     }
   };
 
-  const handleVideoToggle = () => {
+  const handleVideoToggle = async () => {
+    console.log('📹 Toggling camera...');
+    
+    // Toggle video using the hook
+    await toggleVideo();
+    
     const newVideoState = !isVideoOn;
-    setIsVideoOn(newVideoState);
     console.log(newVideoState ? '📹 Camera activated' : '🚫 Camera deactivated');
     console.log('Emitting update-media-state:', { 
       meetingId, 
@@ -387,7 +417,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       <header className="video-call-header">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
           <div className="recording-indicator" aria-hidden="true"></div>
-          <span className="text-white text-xs sm:text-sm md:text-base truncate">Meeting in progress</span>
+          <span className="text-white text-xs sm:text-sm md:text-base truncate">Reunión en progreso</span>
           <Badge variant="secondary" className="flex-shrink-0 text-xs px-1.5 py-0.5">
             <Users className="w-3 h-3 mr-1" aria-hidden="true" />
             {participants.length}
@@ -417,6 +447,13 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           {participants.map((participant) => {
             // HU-005: Detect if participant is speaking
             const isSpeaking = speakingUsers.includes(participant.id);
+            const isCurrentUser = participant.id === user?.uid;
+            
+            // Get video stream for this participant
+            const videoStream = isCurrentUser 
+              ? videoLocalStream 
+              : videoRemoteStreams.get(participant.id);
+            
             return (
             <div
               key={participant.id}
@@ -440,10 +477,24 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
                 </div>
               ) : (
                 <div className="participant-video-on">
-                  {/* Video simulation - in production would be a real video element */}
-                  <div className="w-full h-full flex items-center justify-center">
-                    <span className="text-muted text-sm">[Live video]</span>
-                  </div>
+                  {/* Real video element */}
+                  {videoStream ? (
+                    <video
+                      autoPlay
+                      playsInline
+                      muted={isCurrentUser} // Mute own video to avoid feedback
+                      ref={(video) => {
+                        if (video && video.srcObject !== videoStream) {
+                          video.srcObject = videoStream;
+                        }
+                      }}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                      <span className="text-white text-sm">Cargando video...</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -451,7 +502,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               <div className="participant-info">
                 <div className="flex items-center justify-between">
                   <span className="text-white text-sm truncate">
-                    {participant.id === user?.uid ? 'You' : participant.name}
+                    {participant.id === user?.uid ? 'Tú' : participant.name}
                   </span>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     {/* HU-006: Synchronized muted microphone indicator */}
