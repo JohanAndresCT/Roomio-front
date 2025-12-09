@@ -60,18 +60,25 @@ export function useVideoCall({
 
     const pc = new RTCPeerConnection(config);
 
+    console.log(`[PC-${peerId}] Creating peer connection`);
+
     // Add local stream tracks if available
     if (localStreamRef.current) {
+      console.log(`[PC-${peerId}] Adding ${localStreamRef.current.getTracks().length} local tracks`);
       localStreamRef.current.getTracks().forEach(track => {
+        console.log(`[PC-${peerId}] Adding track: ${track.kind} (${track.label})`);
         pc.addTrack(track, localStreamRef.current!);
       });
+    } else {
+      console.log(`[PC-${peerId}] No local stream available yet`);
     }
 
     // Handle incoming tracks
     pc.ontrack = (event) => {
-      console.log('📹 Received remote track from', peerId);
+      console.log(`[PC-${peerId}] Received remote track:`, event.track.kind);
       const [remoteStream] = event.streams;
       if (remoteStream) {
+        console.log(`[PC-${peerId}] Setting remote stream with ${remoteStream.getTracks().length} tracks`);
         setRemoteStreams(prev => new Map(prev).set(peerId, remoteStream));
       }
     };
@@ -89,7 +96,7 @@ export function useVideoCall({
 
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
-      console.log(`📡 Connection state with ${peerId}:`, pc.connectionState);
+      console.log(`Connection state with ${peerId}:`, pc.connectionState);
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         setError(`Connection with peer ${peerId} failed`);
       }
@@ -117,7 +124,7 @@ export function useVideoCall({
       setIsVideoEnabled(true);
       setError(null);
       
-      console.log('📹 Local video stream started');
+      console.log('Local video stream started');
       
       // Add tracks to existing peer connections
       peersRef.current.forEach((peer) => {
@@ -128,7 +135,7 @@ export function useVideoCall({
 
       return stream;
     } catch (err: any) {
-      console.error('❌ Error starting video:', err);
+      console.error('Error starting video:', err);
       setError(err.message || 'Failed to start video');
       return null;
     }
@@ -143,7 +150,7 @@ export function useVideoCall({
       localStreamRef.current = null;
       setLocalStream(null);
       setIsVideoEnabled(false);
-      console.log('📹 Local video stream stopped');
+      console.log('Local video stream stopped');
       
       // Notify peers about video state
       if (socketRef.current) {
@@ -177,11 +184,13 @@ export function useVideoCall({
    */
   const createOffer = useCallback(async (peerId: string) => {
     try {
+      console.log(`[OFFER] Creating offer for peer: ${peerId}`);
       const pc = createPeerConnection(peerId);
       peersRef.current.set(peerId, { connection: pc });
 
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
+      console.log(`[OFFER] Offer created and set as local description for ${peerId}`);
 
       if (socketRef.current) {
         socketRef.current.emit('video-offer', {
@@ -189,9 +198,10 @@ export function useVideoCall({
           roomId: meetingId,
           to: peerId
         });
+        console.log(`[OFFER] Sent offer to ${peerId}`);
       }
     } catch (err) {
-      console.error('❌ Error creating offer:', err);
+      console.error('Error creating offer:', err);
       setError('Failed to create video offer');
     }
   }, [createPeerConnection, meetingId]);
@@ -200,7 +210,7 @@ export function useVideoCall({
   useEffect(() => {
     if (!enabled) return;
 
-    console.log('🎥 Initializing video call for meeting:', meetingId);
+    console.log('Initializing video call for meeting:', meetingId);
 
     const socket = io(serverUrl, {
       transports: ['websocket'],
@@ -211,18 +221,18 @@ export function useVideoCall({
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('✅ Connected to video server');
+      console.log('Connected to video server');
       setIsConnected(true);
       socket.emit('join-video-room', meetingId);
     });
 
     socket.on('disconnect', () => {
-      console.log('🔴 Disconnected from video server');
+      console.log('Disconnected from video server');
       setIsConnected(false);
     });
 
     socket.on('ice-config', (config: IceServerConfig) => {
-      console.log('🧊 Received ICE config');
+      console.log('Received ICE config');
       iceConfigRef.current = config;
     });
 
@@ -230,64 +240,81 @@ export function useVideoCall({
       setError('Meeting room is full (max 10 participants)');
     });
 
+    // Handle existing users in the room
+    socket.on('existing-users', ({ users }: { users: string[] }) => {
+      console.log('Existing users in room:', users);
+      // Create offers for all existing users
+      users.forEach(existingUserId => {
+        console.log('Creating offer for existing user:', existingUserId);
+        createOffer(existingUserId);
+      });
+    });
+
     socket.on('user-joined', ({ userId: joinedUserId }: { userId: string }) => {
-      console.log('👤 User joined:', joinedUserId);
+      console.log('User joined:', joinedUserId);
       createOffer(joinedUserId);
     });
 
     socket.on('video-offer', async ({ offer, from }: { offer: RTCSessionDescriptionInit; from: string }) => {
-      console.log('📨 Received video offer from:', from);
+      console.log(`[ANSWER] Received video offer from: ${from}`);
       try {
         const pc = createPeerConnection(from);
         peersRef.current.set(from, { connection: pc });
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
+        console.log(`[ANSWER] Set remote description from ${from}`);
+        
         const answer = await pc.createAnswer();
         await pc.setLocalDescription(answer);
+        console.log(`[ANSWER] Created and set answer for ${from}`);
 
         socket.emit('video-answer', {
           answer,
           roomId: meetingId,
           to: from
         });
+        console.log(`[ANSWER] Sent answer to ${from}`);
       } catch (err) {
-        console.error('❌ Error handling offer:', err);
+        console.error('Error handling offer:', err);
         setError('Failed to handle video offer');
       }
     });
 
     socket.on('video-answer', async ({ answer, from }: { answer: RTCSessionDescriptionInit; from: string }) => {
-      console.log('📨 Received video answer from:', from);
+      console.log(`[COMPLETE] Received video answer from: ${from}`);
       try {
         const peer = peersRef.current.get(from);
         if (peer) {
           await peer.connection.setRemoteDescription(new RTCSessionDescription(answer));
+          console.log(`[COMPLETE] Set remote description from answer for ${from}`);
+        } else {
+          console.warn(`[COMPLETE] No peer connection found for ${from}`);
         }
       } catch (err) {
-        console.error('❌ Error handling answer:', err);
+        console.error('Error handling answer:', err);
         setError('Failed to handle video answer');
       }
     });
 
     socket.on('ice-candidate', async ({ candidate, from }: { candidate: RTCIceCandidateInit; from: string }) => {
-      console.log('🧊 Received ICE candidate from:', from);
+      console.log('Received ICE candidate from:', from);
       try {
         const peer = peersRef.current.get(from);
         if (peer && candidate) {
           await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
         }
       } catch (err) {
-        console.error('❌ Error adding ICE candidate:', err);
+        console.error('Error adding ICE candidate:', err);
       }
     });
 
     socket.on('peer-toggle-video', ({ peerId, enabled }: { peerId: string; enabled: boolean }) => {
-      console.log(`📹 Peer ${peerId} toggled video:`, enabled);
+      console.log(`Peer ${peerId} toggled video:`, enabled);
       // Handle remote peer video toggle if needed
     });
 
     socket.on('peer-disconnected', ({ peerId }: { peerId: string }) => {
-      console.log('👋 Peer disconnected:', peerId);
+      console.log('Peer disconnected:', peerId);
       const peer = peersRef.current.get(peerId);
       if (peer) {
         peer.connection.close();
@@ -301,7 +328,7 @@ export function useVideoCall({
     });
 
     return () => {
-      console.log('🧹 Cleaning up video call');
+      console.log('Cleaning up video call');
       stopVideo();
       peersRef.current.forEach(peer => peer.connection.close());
       peersRef.current.clear();
