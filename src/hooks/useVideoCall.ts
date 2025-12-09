@@ -312,7 +312,11 @@ export function useVideoCall({
 
     // Handle existing users in the room
     socket.on('existing-users', ({ users }: { users: string[] }) => {
-      console.log('Existing users in room:', users);
+      console.log('📋 ========================================');
+      console.log('📋 EXISTING USERS EVENT');
+      console.log('📋 Existing users in room:', users);
+      console.log('📋 Will create offers for each user');
+      console.log('📋 ========================================');
       // Create offers for all existing users
       users.forEach(existingUserId => {
         console.log('Creating offer for existing user:', existingUserId);
@@ -321,7 +325,11 @@ export function useVideoCall({
     });
 
     socket.on('user-joined', ({ userId: joinedUserId }: { userId: string }) => {
-      console.log('User joined:', joinedUserId);
+      console.log('👤 ========================================');
+      console.log('👤 USER JOINED EVENT');
+      console.log('👤 User joined:', joinedUserId);
+      console.log('👤 Creating offer for new user');
+      console.log('👤 ========================================');
       createOffer(joinedUserId);
     });
 
@@ -377,13 +385,22 @@ export function useVideoCall({
       try {
         const peer = peersRef.current.get(from);
         if (peer) {
-          await peer.connection.setRemoteDescription(new RTCSessionDescription(answer));
-          console.log(`[COMPLETE] Set remote description from answer for ${from}`);
+          console.log(`[COMPLETE] Peer connection state:`, peer.connection.connectionState);
+          console.log(`[COMPLETE] Signaling state:`, peer.connection.signalingState);
+          
+          // Only set remote description if we're in the right state
+          if (peer.connection.signalingState === 'have-local-offer') {
+            await peer.connection.setRemoteDescription(new RTCSessionDescription(answer));
+            console.log(`[COMPLETE] Set remote description from answer for ${from}`);
+          } else {
+            console.warn(`[COMPLETE] Cannot set remote description, signaling state is: ${peer.connection.signalingState}`);
+          }
         } else {
           console.warn(`[COMPLETE] No peer connection found for ${from}`);
         }
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error handling answer:', err);
+        console.error('Error details:', err.message, err.name);
         setError('Failed to handle video answer');
       }
     });
