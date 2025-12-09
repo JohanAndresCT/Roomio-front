@@ -152,6 +152,17 @@ export function useVideoCall({
       setIsVideoEnabled(false);
       console.log('Local video stream stopped');
       
+      // Remove tracks from all peer connections
+      peersRef.current.forEach((peer, peerId) => {
+        const senders = peer.connection.getSenders();
+        senders.forEach(sender => {
+          if (sender.track && sender.track.kind === 'video') {
+            peer.connection.removeTrack(sender);
+            console.log(`Removed video track from peer ${peerId}`);
+          }
+        });
+      });
+      
       // Notify peers about video state
       if (socketRef.current) {
         socketRef.current.emit('toggle-video', { 
@@ -169,8 +180,33 @@ export function useVideoCall({
     if (isVideoEnabled) {
       stopVideo();
     } else {
-      await startVideo();
-      if (socketRef.current) {
+      const stream = await startVideo();
+      if (stream && socketRef.current) {
+        console.log('Video started, adding tracks to existing peers');
+        
+        // Add new video tracks to all existing peer connections
+        peersRef.current.forEach(async (peer, peerId) => {
+          stream.getTracks().forEach(track => {
+            console.log(`Adding ${track.kind} track to existing peer ${peerId}`);
+            peer.connection.addTrack(track, stream);
+          });
+          
+          // Renegotiate the connection
+          try {
+            const offer = await peer.connection.createOffer();
+            await peer.connection.setLocalDescription(offer);
+            
+            socketRef.current?.emit('video-offer', {
+              offer,
+              roomId: meetingId,
+              to: peerId
+            });
+            console.log(`Renegotiated connection with ${peerId} after video toggle`);
+          } catch (err) {
+            console.error(`Failed to renegotiate with ${peerId}:`, err);
+          }
+        });
+        
         socketRef.current.emit('toggle-video', { 
           roomId: meetingId, 
           enabled: true 
@@ -258,8 +294,17 @@ export function useVideoCall({
     socket.on('video-offer', async ({ offer, from }: { offer: RTCSessionDescriptionInit; from: string }) => {
       console.log(`[ANSWER] Received video offer from: ${from}`);
       try {
-        const pc = createPeerConnection(from);
-        peersRef.current.set(from, { connection: pc });
+        // Check if we already have a connection with this peer
+        let pc = peersRef.current.get(from)?.connection;
+        
+        if (pc) {
+          console.log(`[ANSWER] Existing connection found for ${from}, renegotiating`);
+          // Renegotiation - just update the remote description
+        } else {
+          console.log(`[ANSWER] Creating new connection for ${from}`);
+          pc = createPeerConnection(from);
+          peersRef.current.set(from, { connection: pc });
+        }
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
         console.log(`[ANSWER] Set remote description from ${from}`);
