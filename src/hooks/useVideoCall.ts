@@ -86,11 +86,22 @@ export function useVideoCall({
     // Handle ICE candidates
     pc.onicecandidate = (event) => {
       if (event.candidate && socketRef.current) {
+        console.log(`[PC-${peerId}] Sending ICE candidate:`, event.candidate.type);
         socketRef.current.emit('ice-candidate', {
           candidate: event.candidate,
           roomId: meetingId,
           to: peerId
         });
+      } else if (!event.candidate) {
+        console.log(`[PC-${peerId}] ICE gathering complete`);
+      }
+    };
+
+    // Handle ICE connection state changes
+    pc.oniceconnectionstatechange = () => {
+      console.log(`[PC-${peerId}] ICE connection state:`, pc.iceConnectionState);
+      if (pc.iceConnectionState === 'failed' || pc.iceConnectionState === 'disconnected') {
+        console.error(`[PC-${peerId}] ICE connection ${pc.iceConnectionState}`);
       }
     };
 
@@ -99,6 +110,9 @@ export function useVideoCall({
       console.log(`Connection state with ${peerId}:`, pc.connectionState);
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
         setError(`Connection with peer ${peerId} failed`);
+      } else if (pc.connectionState === 'connected') {
+        console.log(`[PC-${peerId}] Successfully connected!`);
+        setError(null);
       }
     };
 
@@ -227,7 +241,10 @@ export function useVideoCall({
       const pc = createPeerConnection(peerId);
       peersRef.current.set(peerId, { connection: pc });
 
-      const offer = await pc.createOffer();
+      const offer = await pc.createOffer({
+        offerToReceiveAudio: false,
+        offerToReceiveVideo: true
+      });
       await pc.setLocalDescription(offer);
       console.log(`[OFFER] Offer created and set as local description for ${peerId}`);
 
@@ -345,11 +362,26 @@ export function useVideoCall({
     });
 
     socket.on('ice-candidate', async ({ candidate, from }: { candidate: RTCIceCandidateInit; from: string }) => {
-      console.log('Received ICE candidate from:', from);
+      console.log(`Received ICE candidate from: ${from}, type:`, candidate.candidate ? 'valid' : 'end-of-candidates');
       try {
         const peer = peersRef.current.get(from);
         if (peer && candidate) {
-          await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
+          // Wait for remote description to be set before adding ICE candidates
+          if (peer.connection.remoteDescription) {
+            await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
+            console.log(`[PC-${from}] ICE candidate added successfully`);
+          } else {
+            console.warn(`[PC-${from}] Remote description not set yet, queuing ICE candidate`);
+            // Queue the candidate and add it after remote description is set
+            setTimeout(async () => {
+              if (peer.connection.remoteDescription) {
+                await peer.connection.addIceCandidate(new RTCIceCandidate(candidate));
+                console.log(`[PC-${from}] Queued ICE candidate added`);
+              }
+            }, 100);
+          }
+        } else if (!peer) {
+          console.warn(`No peer connection found for ${from}`);
         }
       } catch (err) {
         console.error('Error adding ICE candidate:', err);
