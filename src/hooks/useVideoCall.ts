@@ -301,10 +301,24 @@ export function useVideoCall({
           
           console.log(`[TOGGLE-VIDEO-ON] Created offer for ${peerId}:`, {
             type: offer.type,
-            socketConnected: socketRef.current?.connected
+            socketConnected: socketRef.current?.connected,
+            socketId: socketRef.current?.id
           });
           
-          socketRef.current?.emit('video-renegotiate', {
+          if (!socketRef.current?.connected) {
+            console.error(`[TOGGLE-VIDEO-ON] Socket not connected! Cannot send renegotiation`);
+            peer.isNegotiating = false;
+            continue;
+          }
+          
+          console.log(`[TOGGLE-VIDEO-ON] About to emit video-renegotiate:`, {
+            to: peerId,
+            roomId: meetingId,
+            socketId: socketRef.current.id,
+            offerType: offer.type
+          });
+          
+          socketRef.current.emit('video-renegotiate', {
             sdp: offer,
             roomId: meetingId,
             to: peerId
@@ -413,6 +427,11 @@ export function useVideoCall({
       console.log('Connected to video server');
       setIsConnected(true);
       socket.emit('join-video-room', meetingId);
+      
+      // Debug: log all incoming events
+      socket.onAny((eventName, ...args) => {
+        console.log(`[VIDEO-SOCKET] Received event: "${eventName}"`, args);
+      });
     });
 
     socket.on('disconnect', () => {
