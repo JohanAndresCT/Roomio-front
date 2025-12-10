@@ -255,22 +255,38 @@ export function useVideoCall({
               await videoSender.replaceTrack(videoTrack);
               console.log(`[TOGGLE-VIDEO-ON] Replaced black track with camera for peer ${peerId}`);
               
-              // Force renegotiation to ensure remote peer receives new track
+              // ALWAYS force renegotiation to ensure remote peer receives new track
               try {
-                // Only renegotiate if in stable state and not already negotiating
-                if (peer.connection.signalingState === 'stable' && !peer.isNegotiating) {
-                  peer.isNegotiating = true;
-                  const offer = await peer.connection.createOffer();
-                  await peer.connection.setLocalDescription(offer);
-                  socketRef.current?.emit('video-offer', {
-                    offer,
-                    roomId: meetingId,
-                    to: peerId
+                // Wait for stable state if needed
+                if (peer.connection.signalingState !== 'stable') {
+                  console.warn(`[TOGGLE-VIDEO-ON] Waiting for stable state for ${peerId}, current: ${peer.connection.signalingState}`);
+                  await new Promise<void>((resolve) => {
+                    const checkStable = () => {
+                      if (peer.connection.signalingState === 'stable') {
+                        resolve();
+                      } else {
+                        setTimeout(checkStable, 50);
+                      }
+                    };
+                    checkStable();
                   });
-                  console.log(`[TOGGLE-VIDEO-ON] Sent renegotiation offer to ${peerId}`);
-                } else {
-                  console.warn(`[TOGGLE-VIDEO-ON] Skipping renegotiation for ${peerId}, signalingState: ${peer.connection.signalingState}, isNegotiating: ${peer.isNegotiating}`);
                 }
+                
+                // Wait if already negotiating
+                if (peer.isNegotiating) {
+                  console.warn(`[TOGGLE-VIDEO-ON] Waiting for ongoing negotiation with ${peerId}`);
+                  await new Promise(resolve => setTimeout(resolve, 100));
+                }
+                
+                peer.isNegotiating = true;
+                const offer = await peer.connection.createOffer();
+                await peer.connection.setLocalDescription(offer);
+                socketRef.current?.emit('video-offer', {
+                  offer,
+                  roomId: meetingId,
+                  to: peerId
+                });
+                console.log(`[TOGGLE-VIDEO-ON] Sent renegotiation offer to ${peerId}`);
               } catch (err) {
                 console.error(`[TOGGLE-VIDEO-ON] Renegotiation failed for ${peerId}:`, err);
                 peer.isNegotiating = false;
