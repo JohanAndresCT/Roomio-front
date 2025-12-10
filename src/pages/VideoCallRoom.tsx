@@ -474,8 +474,17 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
                       playsInline
                       muted={isCurrentUser} // Mute own video to avoid feedback
                       ref={(video) => {
-                        if (video && video.srcObject !== videoStream) {
-                          video.srcObject = videoStream;
+                        if (video) {
+                          // Always update srcObject to ensure track changes are reflected
+                          if (video.srcObject !== videoStream) {
+                            console.log(`Setting video srcObject for ${participant.name}`);
+                            video.srcObject = videoStream;
+                          }
+                          
+                          // Force video to play in case it was paused
+                          video.play().catch(err => {
+                            console.warn(`Failed to play video for ${participant.name}:`, err);
+                          });
                         }
                       }}
                       className="w-full h-full object-cover"

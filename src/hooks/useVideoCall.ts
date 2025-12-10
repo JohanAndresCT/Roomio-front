@@ -101,11 +101,28 @@ export function useVideoCall({
 
     // Handle incoming tracks
     pc.ontrack = (event) => {
-      console.log(`[PC-${peerId}] Received remote track:`, event.track.kind);
+      console.log(`[PC-${peerId}] Received remote track:`, event.track.kind, 'enabled:', event.track.enabled, 'readyState:', event.track.readyState);
       const [remoteStream] = event.streams;
       if (remoteStream) {
         console.log(`[PC-${peerId}] Setting remote stream with ${remoteStream.getTracks().length} tracks`);
-        setRemoteStreams(prev => new Map(prev).set(peerId, remoteStream));
+        
+        // Log all tracks in the stream
+        remoteStream.getTracks().forEach(track => {
+          console.log(`[PC-${peerId}] Stream track: ${track.kind}, enabled: ${track.enabled}, readyState: ${track.readyState}`);
+        });
+        
+        // Create a new MediaStream object to force React re-render
+        // This is necessary because replaceTrack doesn't change the stream reference
+        const newStream = new MediaStream(remoteStream.getTracks());
+        
+        setRemoteStreams(prev => {
+          const newMap = new Map(prev);
+          newMap.set(peerId, newStream);
+          console.log(`[PC-${peerId}] Updated remoteStreams map with NEW stream instance, now has ${newMap.size} streams`);
+          return newMap;
+        });
+      } else {
+        console.warn(`[PC-${peerId}] No stream provided with track`);
       }
     };
 
@@ -219,7 +236,7 @@ export function useVideoCall({
       const blackTrack = createBlackVideoTrack();
       blackVideoTrackRef.current = blackTrack;
       
-      // Use Promise.all to wait for all track replacements
+      // Use Promise.all to wait for all track replacements and renegotiations
       const replacePromises = Array.from(peersRef.current.entries()).map(async ([peerId, peer]) => {
         // Wait for stable state
         if (peer.connection.signalingState !== 'stable') {
@@ -241,6 +258,20 @@ export function useVideoCall({
         if (videoSender) {
           await videoSender.replaceTrack(blackTrack);
           console.log(`[TOGGLE-VIDEO] Replaced with black track for peer ${peerId}`);
+          
+          // Force renegotiation to notify remote peer
+          try {
+            const offer = await peer.connection.createOffer();
+            await peer.connection.setLocalDescription(offer);
+            socketRef.current?.emit('video-offer', {
+              offer,
+              roomId: meetingId,
+              to: peerId
+            });
+            console.log(`[TOGGLE-VIDEO] Sent renegotiation offer to ${peerId}`);
+          } catch (err) {
+            console.error(`[TOGGLE-VIDEO] Renegotiation failed for ${peerId}:`, err);
+          }
         } else {
           console.warn(`[TOGGLE-VIDEO] No video sender found for peer ${peerId}`);
         }
@@ -252,14 +283,14 @@ export function useVideoCall({
       if (stream) {
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
-          // Replace camera track in all connections
+          // Replace camera track in all connections and trigger renegotiation
           const replacePromises = Array.from(peersRef.current.entries()).map(async ([peerId, peer]) => {
             // Wait for stable state
-            if (peer.connection.signalingState !== 'stable') {
+            if (peer.connection.signalingState !== 'stable' || peer.isNegotiating) {
               console.log(`[TOGGLE-VIDEO] Waiting for stable state for ${peerId}`);
               await new Promise(resolve => {
                 const checkStable = () => {
-                  if (peer.connection.signalingState === 'stable') {
+                  if (peer.connection.signalingState === 'stable' && !peer.isNegotiating) {
                     resolve(undefined);
                   } else {
                     setTimeout(checkStable, 50);
@@ -274,6 +305,22 @@ export function useVideoCall({
             if (videoSender) {
               await videoSender.replaceTrack(videoTrack);
               console.log(`[TOGGLE-VIDEO] Replaced black track with camera for peer ${peerId}`);
+              
+              // Force renegotiation to ensure remote peer receives new track
+              try {
+                peer.isNegotiating = true;
+                const offer = await peer.connection.createOffer();
+                await peer.connection.setLocalDescription(offer);
+                socketRef.current?.emit('video-offer', {
+                  offer,
+                  roomId: meetingId,
+                  to: peerId
+                });
+                console.log(`[TOGGLE-VIDEO] Sent renegotiation offer to ${peerId} with camera track`);
+              } catch (err) {
+                console.error(`[TOGGLE-VIDEO] Renegotiation failed for ${peerId}:`, err);
+                peer.isNegotiating = false;
+              }
             } else {
               console.warn(`[TOGGLE-VIDEO] No video sender for peer ${peerId}`);
             }
