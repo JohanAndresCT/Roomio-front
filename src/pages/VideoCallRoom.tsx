@@ -98,7 +98,11 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     remoteStreams: videoRemoteStreams, 
     isVideoEnabled, 
     toggleVideo,
-    error: videoError 
+    error: videoError,
+    videoSocketId,
+    socketToUserMap,
+    userToSocketMap,
+    addUserMapping
   } = useVideoCall({
     meetingId: meetingId,
     userId: user?.uid || '',
@@ -141,6 +145,43 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       console.error('❌ Error de video:', videoError);
     }
   }, [videoError]);
+
+  // Debug video streams only when they change (controlled logging)
+  useEffect(() => {
+    console.log('📹 Video Remote Streams Updated:', {
+      count: videoRemoteStreams.size,
+      socketIds: Array.from(videoRemoteStreams.keys())
+    });
+  }, [videoRemoteStreams]);
+
+  // Debug mapping state
+  useEffect(() => {
+    console.log('🗺️ ID Mapping Updated:', {
+      userToSocket: Array.from(userToSocketMap.entries()),
+      socketToUser: Array.from(socketToUserMap.entries())
+    });
+  }, [userToSocketMap, socketToUserMap]);
+
+  // Send videoSocketId to other participants via chat socket when it's available
+  useEffect(() => {
+    if (videoSocketId && socket?.connected && user?.uid) {
+      console.log('[VIDEO-MAPPING] Broadcasting my video socket ID:', {
+        firebaseUid: user.uid,
+        videoSocketId: videoSocketId,
+        meetingId: meetingId
+      });
+      
+      // Add our own mapping locally
+      addUserMapping(user.uid, videoSocketId);
+      
+      // Broadcast to all participants in the meeting
+      socket.emit('video-socket-mapping', {
+        meetingId: meetingId,
+        userId: user.uid,
+        videoSocketId: videoSocketId
+      });
+    }
+  }, [videoSocketId, socket, user?.uid, meetingId, addUserMapping]);
 
   useEffect(() => {
     // If there's already an active connection, don't create another
@@ -341,6 +382,17 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           return updated;
         });
       });
+
+      // Listen for video socket ID mappings from other participants
+      socket.on('video-socket-mapping', ({ userId: remoteUserId, videoSocketId: remoteVideoSocketId }: any) => {
+        console.log('[VIDEO-MAPPING] Received mapping from participant:', {
+          firebaseUid: remoteUserId,
+          videoSocketId: remoteVideoSocketId
+        });
+        
+        // Add the mapping to our video hook
+        addUserMapping(remoteUserId, remoteVideoSocketId);
+      });
     };
 
     connectSocket();
@@ -440,18 +492,16 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
             const isCurrentUser = participant.id === user?.uid;
             
             // Get video stream for this participant
-            const videoStream = isCurrentUser 
-              ? videoLocalStream 
-              : videoRemoteStreams.get(participant.id);
-            
-            // Debug: Log video stream lookup
-            if (!isCurrentUser) {
-              console.log(`🔍 Looking for video stream for ${participant.name}:`, {
-                participantId: participant.id,
-                hasStream: !!videoStream,
-                remoteStreamsKeys: Array.from(videoRemoteStreams.keys()),
-                remoteStreamsSize: videoRemoteStreams.size
-              });
+            // For remote users, we need to map their Firebase UID to their video socket ID
+            let videoStream: MediaStream | undefined;
+            if (isCurrentUser) {
+              videoStream = videoLocalStream || undefined;
+            } else {
+              // Get the socket ID for this participant's Firebase UID
+              const participantSocketId = userToSocketMap.get(participant.id);
+              if (participantSocketId) {
+                videoStream = videoRemoteStreams.get(participantSocketId);
+              }
             }
             
             return (

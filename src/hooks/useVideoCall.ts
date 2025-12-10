@@ -45,6 +45,11 @@ export function useVideoCall({
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isVideoEnabled, setIsVideoEnabled] = useState(false);
+  const [videoSocketId, setVideoSocketId] = useState<string | null>(null);
+  
+  // Maps to track socket ID <-> user ID relationship
+  const [socketToUserMap, setSocketToUserMap] = useState<Map<string, string>>(new Map());
+  const [userToSocketMap, setUserToSocketMap] = useState<Map<string, string>>(new Map());
   
   // Force re-render counter when streams change
   const [, forceUpdate] = useState(0);
@@ -508,9 +513,27 @@ export function useVideoCall({
     socket.on('connect', () => {
       console.log('[VIDEO-CALL] ✅ Connected to video server!');
       console.log('[VIDEO-CALL] Socket ID:', socket.id);
+      setVideoSocketId(socket.id || null);
       setIsConnected(true);
       console.log('[VIDEO-CALL] Joining video room:', meetingId);
-      socket.emit('join-video-room', meetingId);
+      
+      // Send both meetingId and userId to establish the mapping on the server
+      socket.emit('join-video-room', { roomId: meetingId, userId: userId });
+      
+      // Also add our own mapping locally immediately
+      if (socket.id) {
+        console.log('[VIDEO-MAPPING] Adding own mapping:', { userId, socketId: socket.id });
+        setSocketToUserMap(prev => {
+          const newMap = new Map(prev);
+          newMap.set(socket.id!, userId);
+          return newMap;
+        });
+        setUserToSocketMap(prev => {
+          const newMap = new Map(prev);
+          newMap.set(userId, socket.id!);
+          return newMap;
+        });
+      }
       
       // Debug: log all incoming events
       socket.onAny((eventName, ...args) => {
@@ -538,16 +561,31 @@ export function useVideoCall({
     });
 
     // Handle existing users in the room
+    // Handle user mapping event (socketId -> userId)
+    socket.on('user-mapping', ({ socketId, userId: mappedUserId }: { socketId: string; userId: string }) => {
+      console.log('[VIDEO-MAPPING] Received user mapping:', { socketId, userId: mappedUserId });
+      setSocketToUserMap(prev => {
+        const newMap = new Map(prev);
+        newMap.set(socketId, mappedUserId);
+        return newMap;
+      });
+      setUserToSocketMap(prev => {
+        const newMap = new Map(prev);
+        newMap.set(mappedUserId, socketId);
+        return newMap;
+      });
+    });
+
     socket.on('existing-users', ({ users }: { users: string[] }) => {
       console.log('📋 ========================================');
       console.log('📋 EXISTING USERS EVENT');
-      console.log('📋 Existing users in room:', users);
+      console.log('📋 Existing users (socket IDs):', users);
       console.log('📋 Will create offers for each user');
       console.log('📋 ========================================');
-      // Create offers for all existing users
-      users.forEach(existingUserId => {
-        console.log('Creating offer for existing user:', existingUserId);
-        createOffer(existingUserId);
+      // Create offers for all existing users (these are socket IDs)
+      users.forEach(existingSocketId => {
+        console.log('Creating offer for existing user (socket):', existingSocketId);
+        createOffer(existingSocketId);
       });
     });
 
@@ -798,6 +836,23 @@ export function useVideoCall({
     };
   }, [enabled, meetingId, serverUrl, createPeerConnection, createOffer, stopVideo]);
 
+  /**
+   * Add a mapping between a user ID and their video socket ID
+   */
+  const addUserMapping = useCallback((userId: string, socketId: string) => {
+    console.log('[VIDEO-MAPPING] Adding mapping:', { userId, socketId });
+    setSocketToUserMap(prev => {
+      const newMap = new Map(prev);
+      newMap.set(socketId, userId);
+      return newMap;
+    });
+    setUserToSocketMap(prev => {
+      const newMap = new Map(prev);
+      newMap.set(userId, socketId);
+      return newMap;
+    });
+  }, []);
+
   return {
     isConnected,
     error,
@@ -806,6 +861,10 @@ export function useVideoCall({
     isVideoEnabled,
     toggleVideo,
     startVideo,
-    stopVideo
+    stopVideo,
+    videoSocketId,
+    socketToUserMap,
+    userToSocketMap,
+    addUserMapping
   };
 }
