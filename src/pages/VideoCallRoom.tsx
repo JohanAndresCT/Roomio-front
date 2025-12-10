@@ -102,7 +102,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
     error: videoError,
     videoSocketId,
     socketToUserMap,
-    userToSocketMap
+    userToSocketMap,
+    addUserMapping
   } = useVideoCall({
     meetingId: meetingId,
     userId: user?.uid || '',
@@ -161,6 +162,24 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       socketToUser: Array.from(socketToUserMap.entries())
     });
   }, [userToSocketMap, socketToUserMap]);
+
+  // Send videoSocketId to other participants via chat socket when it's available
+  useEffect(() => {
+    if (videoSocketId && socket?.connected && user?.uid) {
+      console.log('[VIDEO-MAPPING-CHAT] Broadcasting my video socket ID:', {
+        firebaseUid: user.uid,
+        videoSocketId: videoSocketId,
+        meetingId: meetingId
+      });
+      
+      // Broadcast to all participants in the meeting via chat
+      socket.emit('video-socket-mapping', {
+        meetingId: meetingId,
+        userId: user.uid,
+        videoSocketId: videoSocketId
+      });
+    }
+  }, [videoSocketId, socket, user?.uid, meetingId]);
 
   useEffect(() => {
     // If there's already an active connection, don't create another
@@ -360,6 +379,19 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
           
           return updated;
         });
+      });
+
+      // Listen for video socket ID mappings from other participants via chat
+      socket.on('video-socket-mapping', ({ userId: remoteUserId, videoSocketId: remoteVideoSocketId }: any) => {
+        console.log('[VIDEO-MAPPING-CHAT] Received mapping from participant:', {
+          firebaseUid: remoteUserId,
+          videoSocketId: remoteVideoSocketId
+        });
+        
+        // Add the mapping to our video hook
+        if (addUserMapping) {
+          addUserMapping(remoteUserId, remoteVideoSocketId);
+        }
       });
 
     };
