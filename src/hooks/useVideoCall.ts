@@ -426,14 +426,17 @@ export function useVideoCall({
           console.log(`[ANSWER] Reusing existing connection for ${from} (renegotiation)`);
           pc = existingPeer.connection;
           
-          // If we're already negotiating, wait for it to complete
+          // Handle glare condition (both sides trying to negotiate)
+          if (pc.signalingState === 'have-local-offer') {
+            console.warn(`[ANSWER] Glare detected with ${from}, rolling back local offer`);
+            // Rollback by accepting remote offer
+            await pc.setLocalDescription({type: 'rollback'});
+          }
+          
+          // If we're already negotiating, this rollback handles it
           if (existingPeer.isNegotiating) {
-            console.warn(`[ANSWER] Already negotiating, queuing offer from ${from}`);
-            // Queue the offer to be processed after current negotiation
-            setTimeout(() => {
-              socket.emit('video-offer', { offer, from });
-            }, 100);
-            return;
+            console.log(`[ANSWER] Was negotiating, now accepting remote offer from ${from}`);
+            existingPeer.isNegotiating = false;
           }
         } else {
           console.log(`[ANSWER] Creating new connection for ${from}`);
