@@ -482,9 +482,12 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
       {/* Video Grid */}
       <main className="video-call-main">
         <div className={`video-call-grid ${
-          participants.length <= 2 ? 'grid-cols-1 sm:grid-cols-2' :
-          participants.length <= 4 ? 'grid-cols-1 sm:grid-cols-2' :
+          participants.length === 1 ? 'grid-cols-1' :
+          participants.length === 2 ? 'grid-cols-1 sm:grid-cols-2' :
+          participants.length === 3 ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3' :
+          participants.length === 4 ? 'grid-cols-2 lg:grid-cols-2' :
           participants.length <= 6 ? 'grid-cols-2 lg:grid-cols-3' :
+          participants.length <= 9 ? 'grid-cols-2 lg:grid-cols-3 xl:grid-cols-3' :
           'grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
         }`}>
           {participants.map((participant) => {

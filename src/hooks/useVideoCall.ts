@@ -2,37 +2,99 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { io, Socket } from 'socket.io-client';
 
 /**
- * Configuration for WebRTC Ice Servers
+ * Configuration for WebRTC ICE (Interactive Connectivity Establishment) servers.
+ * ICE servers include STUN and TURN servers for NAT traversal.
+ * @interface IceServerConfig
  */
 interface IceServerConfig {
+  /** Array of RTCIceServer configurations (STUN/TURN servers) */
   iceServers: RTCIceServer[];
 }
 
 /**
- * Peer connection information
+ * Information about a peer-to-peer WebRTC connection.
+ * Tracks the RTCPeerConnection and its negotiation state.
+ * @interface PeerConnection
  */
 interface PeerConnection {
+  /** The WebRTC peer connection instance */
   connection: RTCPeerConnection;
+  /** Optional media stream associated with this peer */
   stream?: MediaStream;
-  isNegotiating?: boolean; // Track if negotiation is in progress
+  /** Flag indicating if SDP negotiation is currently in progress */
+  isNegotiating?: boolean;
 }
 
 /**
- * Hook options
+ * Configuration options for the useVideoCall hook.
+ * @interface UseVideoCallOptions
  */
 interface UseVideoCallOptions {
+  /** Unique identifier for the meeting/room */
   meetingId: string;
+  /** Firebase UID of the current user */
   userId: string;
+  /** Whether video call functionality is enabled */
   enabled: boolean;
+  /** Optional custom video server URL (defaults to environment variable) */
   serverUrl?: string;
 }
 
 /**
- * Custom hook for managing WebRTC video connections in a meeting.
- * Handles peer-to-peer video streaming, signaling, and connection management.
+ * Custom React hook for managing WebRTC video connections in a multi-party video meeting.
  * 
- * @param options - Configuration options for the video call
- * @returns Video call state and control functions
+ * This hook handles:
+ * - Establishing peer-to-peer WebRTC connections with multiple participants
+ * - Managing local video stream (camera access)
+ * - Receiving and displaying remote video streams
+ * - Signaling via Socket.IO for SDP offer/answer exchange
+ * - ICE candidate exchange for NAT traversal
+ * - Video toggling (on/off with black placeholder)
+ * - Mapping between Firebase UIDs and WebRTC socket IDs
+ * - Automatic reconnection and error handling
+ * 
+ * @param {UseVideoCallOptions} options - Configuration options
+ * @param {string} options.meetingId - Unique meeting identifier for the room
+ * @param {string} options.userId - Firebase UID of the current user
+ * @param {boolean} options.enabled - Whether to initialize video call functionality
+ * @param {string} [options.serverUrl] - Optional video signaling server URL
+ * 
+ * @returns {Object} Video call state and control functions
+ * @returns {boolean} isConnected - Whether socket is connected to video server
+ * @returns {string | null} error - Current error message, if any
+ * @returns {MediaStream | null} localStream - User's local camera stream
+ * @returns {Map<string, MediaStream>} remoteStreams - Map of peer socket IDs to their video streams
+ * @returns {boolean} isVideoEnabled - Whether local camera is currently active
+ * @returns {() => Promise<void>} toggleVideo - Function to turn camera on/off
+ * @returns {() => Promise<MediaStream | null>} startVideo - Function to start camera
+ * @returns {() => void} stopVideo - Function to stop camera
+ * @returns {string | null} videoSocketId - Current user's video socket ID
+ * @returns {Map<string, string>} socketToUserMap - Map of socket IDs to Firebase UIDs
+ * @returns {Map<string, string>} userToSocketMap - Map of Firebase UIDs to socket IDs
+ * @returns {(userId: string, socketId: string) => void} addUserMapping - Function to manually add ID mapping
+ * 
+ * @example
+ * ```tsx
+ * const {
+ *   localStream,
+ *   remoteStreams,
+ *   isVideoEnabled,
+ *   toggleVideo,
+ *   userToSocketMap
+ * } = useVideoCall({
+ *   meetingId: 'MTG-123',
+ *   userId: 'firebase-uid-123',
+ *   enabled: true
+ * });
+ * 
+ * // Display local video
+ * <video ref={video => video.srcObject = localStream} autoPlay muted />
+ * 
+ * // Display remote videos
+ * {Array.from(remoteStreams.entries()).map(([socketId, stream]) => (
+ *   <video key={socketId} ref={video => video.srcObject = stream} autoPlay />
+ * ))}
+ * ```
  */
 export function useVideoCall({ 
   meetingId, 
@@ -62,7 +124,10 @@ export function useVideoCall({
   const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
 
   /**
-   * Creates a black video track (placeholder)
+   * Creates a black video track as a placeholder when camera is off.
+   * Uses an HTML canvas to generate a 640x480 black frame.
+   * 
+   * @returns {MediaStreamTrack} A video track containing a black frame
    */
   const createBlackVideoTrack = useCallback(() => {
     const canvas = document.createElement('canvas');
@@ -78,7 +143,16 @@ export function useVideoCall({
   }, []);
 
   /**
-   * Creates a new RTCPeerConnection with ICE servers
+   * Creates and configures a new RTCPeerConnection for a specific peer.
+   * 
+   * Sets up event handlers for:
+   * - ontrack: Receiving remote video streams
+   * - onicecandidate: Exchanging ICE candidates for NAT traversal
+   * - oniceconnectionstatechange: Monitoring connection health
+   * - onconnectionstatechange: Handling failures and reconnections
+   * 
+   * @param {string} peerId - Socket ID of the peer to connect to
+   * @returns {RTCPeerConnection} Configured peer connection instance
    */
   const createPeerConnection = useCallback((peerId: string): RTCPeerConnection => {
     console.log(`[CREATE-PC] Creating peer connection for: ${peerId}`);
@@ -211,7 +285,13 @@ export function useVideoCall({
   }, [meetingId, createBlackVideoTrack]);
 
   /**
-   * Starts local video stream
+   * Requests camera access and starts the local video stream.
+   * 
+   * Uses getUserMedia to access the user's camera with 720p resolution.
+   * Updates local stream state and enables video flag on success.
+   * 
+   * @returns {Promise<MediaStream | null>} The local media stream, or null on error
+   * @throws Sets error state if camera access is denied or fails
    */
   const startVideo = useCallback(async () => {
     try {
@@ -242,7 +322,12 @@ export function useVideoCall({
   }, []);
 
   /**
-   * Stops local video stream
+   * Stops the local video stream and releases camera resources.
+   * 
+   * Stops all media tracks, clears local stream state, and notifies peers
+   * via socket that video has been disabled.
+   * 
+   * @returns {void}
    */
   const stopVideo = useCallback(() => {
     if (localStreamRef.current) {
@@ -266,7 +351,20 @@ export function useVideoCall({
   }, [meetingId]);
 
   /**
-   * Toggles local video on/off
+   * Toggles the local camera on or off.
+   * 
+   * When turning OFF:
+   * - Replaces video track with black placeholder (no renegotiation needed)
+   * - Uses replaceTrack for efficiency
+   * 
+   * When turning ON:
+   * - Starts camera stream
+   * - Replaces black track with real video track
+   * - Triggers SDP renegotiation with all peers
+   * - Handles signaling state conflicts (rollback if needed)
+   * 
+   * @returns {Promise<void>}
+   * @async
    */
   const toggleVideo = useCallback(async () => {
     if (isVideoEnabled) {
@@ -421,7 +519,15 @@ export function useVideoCall({
   }, [isVideoEnabled, startVideo, stopVideo, meetingId, createBlackVideoTrack]);
 
   /**
-   * Creates an offer for a peer
+   * Creates and sends an SDP offer to establish a connection with a peer.
+   * 
+   * Either creates a new peer connection or reuses an existing one for renegotiation.
+   * Waits for stable signaling state before creating offer to avoid conflicts.
+   * Sends the offer via socket to the remote peer.
+   * 
+   * @param {string} peerId - Socket ID of the peer to send offer to
+   * @returns {Promise<void>}
+   * @async
    */
   const createOffer = useCallback(async (peerId: string) => {
     try {
@@ -837,7 +943,14 @@ export function useVideoCall({
   }, [enabled, meetingId, serverUrl, createPeerConnection, createOffer, stopVideo]);
 
   /**
-   * Add a mapping between a user ID and their video socket ID
+   * Manually adds a bidirectional mapping between a Firebase user ID and video socket ID.
+   * 
+   * This is used to correlate chat server identities (Firebase UID) with
+   * video server identities (Socket.IO socket ID) for proper stream association.
+   * 
+   * @param {string} userId - Firebase UID of the user
+   * @param {string} socketId - Video server socket ID of the user
+   * @returns {void}
    */
   const addUserMapping = useCallback((userId: string, socketId: string) => {
     console.log('[VIDEO-MAPPING] Adding mapping:', { userId, socketId });

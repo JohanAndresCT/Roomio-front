@@ -47,7 +47,7 @@ export function Footer({ onNavigate }: FooterProps) {
                 <button onClick={() => onNavigate('login')} className="text-muted-foreground hover:text-primary transition-colors text-lg font-medium">Iniciar sesión</button>
               </li>
               <li>
-                <button className="text-muted-foreground hover:text-primary transition-colors text-lg font-medium">Manual de usuario</button>
+                <a href="/manual_de_usuario.pdf" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-primary transition-colors text-lg font-medium block">Manual de usuario</a>
               </li>
               <li>
                 <button onClick={() => onNavigate('sitemap')} className="text-muted-foreground hover:text-primary transition-colors text-lg font-medium">Mapa del sitio</button>

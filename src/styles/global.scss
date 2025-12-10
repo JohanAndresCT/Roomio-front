@@ -698,13 +698,26 @@ footer[role="contentinfo"] .text-center {
 
 .video-call-grid {
   display: grid;
-  gap: 0.5rem;
+  gap: 1rem;
   height: 100%;
+  padding: 1rem;
+  align-content: start;
+  
+  /* Ensure cards have consistent sizing */
+  grid-auto-rows: minmax(200px, 1fr);
 }
 
 @media (min-width: 640px) {
   .video-call-grid {
-    gap: 1rem;
+    gap: 1.25rem;
+    padding: 1.5rem;
+  }
+}
+
+@media (min-width: 1024px) {
+  .video-call-grid {
+    gap: 1.5rem;
+    padding: 2rem;
   }
 }
 
