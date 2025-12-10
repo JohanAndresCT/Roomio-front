@@ -500,22 +500,8 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
             } else {
               // Get the socket ID for this participant's Firebase UID
               const participantSocketId = userToSocketMap.get(participant.id);
-              
-              console.log(`🔍 [STREAM-LOOKUP] Looking for stream for ${participant.name}`);
-              console.log(`🔍 [STREAM-LOOKUP] Participant Firebase UID: ${participant.id}`);
-              console.log(`🔍 [STREAM-LOOKUP] userToSocketMap:`, Object.fromEntries(userToSocketMap));
-              console.log(`🔍 [STREAM-LOOKUP] socketToUserMap:`, Object.fromEntries(socketToUserMap));
-              console.log(`🔍 [STREAM-LOOKUP] Mapped Socket ID: ${participantSocketId}`);
-              console.log(`🔍 [STREAM-LOOKUP] Available remote streams (by socket ID):`, Array.from(videoRemoteStreams.keys()));
-              
               if (participantSocketId) {
                 videoStream = videoRemoteStreams.get(participantSocketId);
-                console.log(`🔍 [STREAM-LOOKUP] Stream found: ${videoStream ? 'YES ✅' : 'NO ❌'}`);
-                if (videoStream) {
-                  console.log(`🔍 [STREAM-LOOKUP] Stream tracks:`, videoStream.getTracks().map(t => `${t.kind} - ${t.enabled} - ${t.readyState}`));
-                }
-              } else {
-                console.log(`🔍 [STREAM-LOOKUP] ❌ No socket ID mapping found for participant ${participant.name}`);
               }
             }
             
