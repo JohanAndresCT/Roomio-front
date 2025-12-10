@@ -86,10 +86,11 @@ export function useVideoCall({
     const videoTrack = localStreamRef.current?.getVideoTracks()[0] || blackVideoTrackRef.current;
     if (videoTrack) {
       const stream = new MediaStream([videoTrack]);
-      console.log(`[PC-${peerId}] Adding video track: ${videoTrack.label}`);
+      console.log(`[PC-${peerId}] Adding video track: ${videoTrack.label}, kind: ${videoTrack.kind}, enabled: ${videoTrack.enabled}`);
       pc.addTrack(videoTrack, stream);
     } else {
-      // Create black track if we don't have one yet
+      // Create black track if we don't have one yet (fallback)
+      console.warn(`[PC-${peerId}] No video track available, creating new black track`);
       const blackTrack = createBlackVideoTrack();
       blackVideoTrackRef.current = blackTrack;
       const stream = new MediaStream([blackTrack]);
