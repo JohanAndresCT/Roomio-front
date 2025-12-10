@@ -157,16 +157,45 @@ export function useVideoCall({
     // Handle connection state changes
     pc.onconnectionstatechange = () => {
       console.log(`Connection state with ${peerId}:`, pc.connectionState);
-      if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
-        console.error(`[PC-${peerId}] Connection ${pc.connectionState}, cleaning up stream`);
-        setError(`Connection with peer ${peerId} failed`);
+      if (pc.connectionState === 'failed') {
+        console.error(`[PC-${peerId}] Connection failed, attempting ICE restart`);
+        setError(`Connection with peer ${peerId} failed, attempting to reconnect...`);
         
-        // Remove the stream from remoteStreams when connection fails
-        remoteStreamsRef.current.delete(peerId);
-        setRemoteStreams(new Map(remoteStreamsRef.current));
-        forceUpdate(prev => prev + 1);
-        
-        console.log(`[PC-${peerId}] Removed failed stream from remoteStreams`);
+        // Try ICE restart first
+        const peer = peersRef.current.get(peerId);
+        if (peer && peer.connection.signalingState === 'stable') {
+          console.log(`[PC-${peerId}] Attempting ICE restart`);
+          peer.connection.createOffer({ iceRestart: true })
+            .then(offer => {
+              return peer.connection.setLocalDescription(offer);
+            })
+            .then(() => {
+              if (socketRef.current) {
+                socketRef.current.emit('video-offer', {
+                  offer: peer.connection.localDescription,
+                  roomId: meetingId,
+                  to: peerId
+                });
+                console.log(`[PC-${peerId}] Sent ICE restart offer`);
+              }
+            })
+            .catch(err => {
+              console.error(`[PC-${peerId}] ICE restart failed:`, err);
+              // If ICE restart fails, remove the stream
+              remoteStreamsRef.current.delete(peerId);
+              setRemoteStreams(new Map(remoteStreamsRef.current));
+              forceUpdate(prev => prev + 1);
+            });
+        } else {
+          // Can't do ICE restart, just clean up
+          remoteStreamsRef.current.delete(peerId);
+          setRemoteStreams(new Map(remoteStreamsRef.current));
+          forceUpdate(prev => prev + 1);
+          console.log(`[PC-${peerId}] Removed failed stream from remoteStreams`);
+        }
+      } else if (pc.connectionState === 'disconnected') {
+        console.warn(`[PC-${peerId}] Connection disconnected, waiting to see if it recovers`);
+        // Don't immediately remove - give it time to reconnect
       } else if (pc.connectionState === 'connected') {
         console.log(`[PC-${peerId}] Successfully connected!`);
         setError(null);
@@ -449,16 +478,25 @@ export function useVideoCall({
 
   // Initialize socket connection
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled) {
+      console.log('[VIDEO-CALL] Video call disabled, skipping initialization');
+      return;
+    }
 
-    console.log('Initializing video call for meeting:', meetingId);
+    console.log('[VIDEO-CALL] ========================================');
+    console.log('[VIDEO-CALL] Initializing video call');
+    console.log('[VIDEO-CALL] Meeting ID:', meetingId);
+    console.log('[VIDEO-CALL] User ID:', userId);
+    console.log('[VIDEO-CALL] Server URL:', serverUrl);
+    console.log('[VIDEO-CALL] ========================================');
     
     // Create black video track at initialization
     if (!blackVideoTrackRef.current) {
       blackVideoTrackRef.current = createBlackVideoTrack();
-      console.log('Created initial black video track');
+      console.log('[VIDEO-CALL] Created initial black video track');
     }
 
+    console.log('[VIDEO-CALL] Attempting to connect to video server...');
     const socket = io(serverUrl, {
       transports: ['websocket'],
       reconnectionAttempts: 5,
@@ -468,8 +506,10 @@ export function useVideoCall({
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log('Connected to video server');
+      console.log('[VIDEO-CALL] ✅ Connected to video server!');
+      console.log('[VIDEO-CALL] Socket ID:', socket.id);
       setIsConnected(true);
+      console.log('[VIDEO-CALL] Joining video room:', meetingId);
       socket.emit('join-video-room', meetingId);
       
       // Debug: log all incoming events
@@ -478,8 +518,13 @@ export function useVideoCall({
       });
     });
 
+    socket.on('connect_error', (error) => {
+      console.error('[VIDEO-CALL] ❌ Connection error:', error);
+      console.error('[VIDEO-CALL] Error message:', error.message);
+    });
+
     socket.on('disconnect', () => {
-      console.log('Disconnected from video server');
+      console.log('[VIDEO-CALL] Disconnected from video server');
       setIsConnected(false);
     });
 
