@@ -196,7 +196,7 @@ export function useVideoCall({
       if (stream && socketRef.current) {
         console.log('Video started, adding tracks to existing peers');
         
-        // Add new video tracks to all existing peer connections
+        // Add new video tracks to all existing peer connection
         peersRef.current.forEach(async (peer, peerId) => {
           stream.getTracks().forEach(track => {
             // Check if this track is already being sent
