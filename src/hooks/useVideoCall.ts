@@ -241,68 +241,89 @@ export function useVideoCall({
       await Promise.all(replacePromises);
       
     } else {
-      // Turning ON video - replace with camera track and renegotiate
+      // Turning ON video - need to start stream first, then renegotiate ALL connections
       const stream = await startVideo();
-      if (stream) {
-        const videoTrack = stream.getVideoTracks()[0];
-        if (videoTrack) {
-          const replacePromises = Array.from(peersRef.current.entries()).map(async ([peerId, peer]) => {
-            const senders = peer.connection.getSenders();
-            const videoSender = senders.find(s => s.track?.kind === 'video');
-            
-            if (videoSender) {
-              // Replace track
-              await videoSender.replaceTrack(videoTrack);
-              console.log(`[TOGGLE-VIDEO-ON] Replaced black track with camera for peer ${peerId}`);
-              
-              // ALWAYS force renegotiation to ensure remote peer receives new track
-              try {
-                // Wait for stable state if needed
-                if (peer.connection.signalingState !== 'stable') {
-                  console.warn(`[TOGGLE-VIDEO-ON] Waiting for stable state for ${peerId}, current: ${peer.connection.signalingState}`);
-                  await new Promise<void>((resolve) => {
-                    const checkStable = () => {
-                      if (peer.connection.signalingState === 'stable') {
-                        resolve();
-                      } else {
-                        setTimeout(checkStable, 50);
-                      }
-                    };
-                    checkStable();
-                  });
+      if (!stream) {
+        console.error('[TOGGLE-VIDEO-ON] Failed to start video stream');
+        return;
+      }
+      
+      const videoTrack = stream.getVideoTracks()[0];
+      if (!videoTrack) {
+        console.error('[TOGGLE-VIDEO-ON] No video track found in stream');
+        return;
+      }
+      
+      console.log('[TOGGLE-VIDEO-ON] Video track obtained:', videoTrack.label);
+      
+      // For each peer connection, remove old track and add new one, then renegotiate
+      for (const [peerId, peer] of peersRef.current.entries()) {
+        try {
+          // Wait for stable state
+          if (peer.connection.signalingState !== 'stable') {
+            console.warn(`[TOGGLE-VIDEO-ON] Waiting for stable state for ${peerId}, current: ${peer.connection.signalingState}`);
+            await new Promise<void>((resolve) => {
+              const checkStable = () => {
+                if (peer.connection.signalingState === 'stable') {
+                  resolve();
+                } else {
+                  setTimeout(checkStable, 100);
                 }
-                
-                // Wait if already negotiating
-                if (peer.isNegotiating) {
-                  console.warn(`[TOGGLE-VIDEO-ON] Waiting for ongoing negotiation with ${peerId}`);
-                  await new Promise(resolve => setTimeout(resolve, 100));
-                }
-                
-                peer.isNegotiating = true;
-                const offer = await peer.connection.createOffer();
-                await peer.connection.setLocalDescription(offer);
-                socketRef.current?.emit('video-renegotiate', {
-                  sdp: offer,
-                  roomId: meetingId,
-                  to: peerId
-                });
-                console.log(`[TOGGLE-VIDEO-ON] Sent renegotiation offer to ${peerId}`);
-              } catch (err) {
-                console.error(`[TOGGLE-VIDEO-ON] Renegotiation failed for ${peerId}:`, err);
-                peer.isNegotiating = false;
-              }
-            }
+              };
+              checkStable();
+            });
+          }
+          
+          // Skip if already negotiating
+          if (peer.isNegotiating) {
+            console.warn(`[TOGGLE-VIDEO-ON] Peer ${peerId} is already negotiating, skipping`);
+            continue;
+          }
+          
+          peer.isNegotiating = true;
+          
+          // Remove old video sender and add new one
+          const senders = peer.connection.getSenders();
+          const oldVideoSender = senders.find(s => s.track?.kind === 'video');
+          
+          if (oldVideoSender) {
+            peer.connection.removeTrack(oldVideoSender);
+            console.log(`[TOGGLE-VIDEO-ON] Removed old video track from peer ${peerId}`);
+          }
+          
+          // Add the new video track
+          peer.connection.addTrack(videoTrack, stream);
+          console.log(`[TOGGLE-VIDEO-ON] Added new video track to peer ${peerId}`);
+          
+          // Create and send offer
+          const offer = await peer.connection.createOffer();
+          await peer.connection.setLocalDescription(offer);
+          
+          console.log(`[TOGGLE-VIDEO-ON] Created offer for ${peerId}:`, {
+            type: offer.type,
+            socketConnected: socketRef.current?.connected
           });
           
-          await Promise.all(replacePromises);
-        }
-        
-        if (socketRef.current) {
-          socketRef.current.emit('toggle-video', { 
-            roomId: meetingId, 
-            enabled: true 
+          socketRef.current?.emit('video-renegotiate', {
+            sdp: offer,
+            roomId: meetingId,
+            to: peerId
           });
+          
+          console.log(`[TOGGLE-VIDEO-ON] Sent renegotiation offer to ${peerId}`);
+          
+        } catch (err) {
+          console.error(`[TOGGLE-VIDEO-ON] Error renegotiating with ${peerId}:`, err);
+          peer.isNegotiating = false;
         }
+      }
+      
+      // Notify via socket
+      if (socketRef.current) {
+        socketRef.current.emit('toggle-video', { 
+          roomId: meetingId, 
+          enabled: true 
+        });
       }
     }
   }, [isVideoEnabled, startVideo, stopVideo, meetingId, createBlackVideoTrack]);
