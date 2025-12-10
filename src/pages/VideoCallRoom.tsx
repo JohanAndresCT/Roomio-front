@@ -80,6 +80,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [isAccessibilityOpen, setIsAccessibilityOpen] = useState(false);
   const [isAISummaryOpen, setIsAISummaryOpen] = useState(false);
+  const [isDarkMode, setIsDarkMode] = useState(false);
 
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [socket, setSocket] = useState<any>(null);

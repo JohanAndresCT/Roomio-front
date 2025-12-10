@@ -910,3 +910,46 @@ footer[role="contentinfo"] .text-center {
     font-size: 0.75rem;
   }
 }
+
+/* Dark Mode styles for video call room */
+.video-call-room.dark-mode {
+  background: #0D1117;
+}
+
+.video-call-room.dark-mode .video-call-header {
+  background: rgba(13, 17, 23, 0.95);
+  border-bottom: 1px solid rgba(48, 54, 61, 0.8);
+}
+
+.video-call-room.dark-mode .video-call-main {
+  background: #0D1117;
+}
+
+.video-call-room.dark-mode .participant-card {
+  background: #161B22;
+  border: 1px solid #30363D;
+}
+
+.video-call-room.dark-mode .participant-video-off {
+  background: #161B22;
+}
+
+.video-call-room.dark-mode .participant-info {
+  background: linear-gradient(to top, rgba(13, 17, 23, 0.95), transparent);
+}
+
+.video-call-room.dark-mode .video-call-footer {
+  background: rgba(13, 17, 23, 0.95);
+  border-top: 1px solid rgba(48, 54, 61, 0.8);
+}
+
+.video-call-room.dark-mode .control-button {
+  background: #21262D;
+  color: #F0F6FC;
+  border: 1px solid #30363D;
+}
+
+.video-call-room.dark-mode .control-button:hover {
+  background: #30363D;
+  border-color: #484F58;
+}
