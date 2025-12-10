@@ -46,11 +46,15 @@ export function useVideoCall({
   const [localStream, setLocalStream] = useState<MediaStream | null>(null);
   const [isVideoEnabled, setIsVideoEnabled] = useState(false);
   
+  // Force re-render counter when streams change
+  const [, forceUpdate] = useState(0);
+  
   const socketRef = useRef<Socket | null>(null);
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
   const iceConfigRef = useRef<IceServerConfig | null>(null);
   const blackVideoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const remoteStreamsRef = useRef<Map<string, MediaStream>>(new Map());
 
   /**
    * Creates a black video track (placeholder)
@@ -115,12 +119,14 @@ export function useVideoCall({
         // This is necessary because replaceTrack doesn't change the stream reference
         const newStream = new MediaStream(remoteStream.getTracks());
         
-        setRemoteStreams(prev => {
-          const newMap = new Map(prev);
-          newMap.set(peerId, newStream);
-          console.log(`[PC-${peerId}] Updated remoteStreams map with NEW stream instance, now has ${newMap.size} streams`);
-          return newMap;
-        });
+        // Update the ref AND state together
+        remoteStreamsRef.current.set(peerId, newStream);
+        
+        // Force React re-render by creating new Map and triggering forceUpdate
+        setRemoteStreams(new Map(remoteStreamsRef.current));
+        forceUpdate(prev => prev + 1);
+        
+        console.log(`[PC-${peerId}] Updated remoteStreams map with NEW stream instance, now has ${remoteStreamsRef.current.size} streams`);
       } else {
         console.warn(`[PC-${peerId}] No stream provided with track`);
       }
@@ -156,13 +162,11 @@ export function useVideoCall({
         setError(`Connection with peer ${peerId} failed`);
         
         // Remove the stream from remoteStreams when connection fails
-        setRemoteStreams(prev => {
-          const newMap = new Map(prev);
-          if (newMap.delete(peerId)) {
-            console.log(`[PC-${peerId}] Removed failed stream from remoteStreams`);
-          }
-          return newMap;
-        });
+        remoteStreamsRef.current.delete(peerId);
+        setRemoteStreams(new Map(remoteStreamsRef.current));
+        forceUpdate(prev => prev + 1);
+        
+        console.log(`[PC-${peerId}] Removed failed stream from remoteStreams`);
       } else if (pc.connectionState === 'connected') {
         console.log(`[PC-${peerId}] Successfully connected!`);
         setError(null);
@@ -170,7 +174,7 @@ export function useVideoCall({
     };
 
     return pc;
-  }, [meetingId]);
+  }, [meetingId, createBlackVideoTrack]);
 
   /**
    * Starts local video stream
@@ -735,11 +739,9 @@ export function useVideoCall({
         peer.connection.close();
         peersRef.current.delete(peerId);
       }
-      setRemoteStreams(prev => {
-        const newMap = new Map(prev);
-        newMap.delete(peerId);
-        return newMap;
-      });
+      remoteStreamsRef.current.delete(peerId);
+      setRemoteStreams(new Map(remoteStreamsRef.current));
+      forceUpdate(prev => prev + 1);
     });
 
     return () => {
