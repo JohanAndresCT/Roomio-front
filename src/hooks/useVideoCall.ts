@@ -629,7 +629,20 @@ export function useVideoCall({
           if (peer.connection.signalingState === 'have-local-offer') {
             console.warn(`[RENEGOTIATE] Glare detected! Rolling back local offer from ${from}`);
             await peer.connection.setLocalDescription({ type: 'rollback' });
-            console.log(`[RENEGOTIATE] Rollback complete, now accepting remote offer`);
+            console.log(`[RENEGOTIATE] Rollback complete, waiting for stable state`);
+            
+            // Wait for stable state after rollback
+            await new Promise<void>((resolve) => {
+              const checkStable = () => {
+                if (peer.connection.signalingState === 'stable') {
+                  console.log(`[RENEGOTIATE] Connection is now stable after rollback`);
+                  resolve();
+                } else {
+                  setTimeout(checkStable, 50);
+                }
+              };
+              checkStable();
+            });
           }
           
           // Received an offer - need to answer
