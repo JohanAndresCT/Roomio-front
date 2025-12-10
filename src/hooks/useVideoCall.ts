@@ -152,7 +152,17 @@ export function useVideoCall({
     pc.onconnectionstatechange = () => {
       console.log(`Connection state with ${peerId}:`, pc.connectionState);
       if (pc.connectionState === 'failed' || pc.connectionState === 'disconnected') {
+        console.error(`[PC-${peerId}] Connection ${pc.connectionState}, cleaning up stream`);
         setError(`Connection with peer ${peerId} failed`);
+        
+        // Remove the stream from remoteStreams when connection fails
+        setRemoteStreams(prev => {
+          const newMap = new Map(prev);
+          if (newMap.delete(peerId)) {
+            console.log(`[PC-${peerId}] Removed failed stream from remoteStreams`);
+          }
+          return newMap;
+        });
       } else if (pc.connectionState === 'connected') {
         console.log(`[PC-${peerId}] Successfully connected!`);
         setError(null);
@@ -259,18 +269,29 @@ export function useVideoCall({
       // For each peer connection, remove old track and add new one, then renegotiate
       for (const [peerId, peer] of peersRef.current.entries()) {
         try {
-          // Wait for stable state
+          // Wait for stable state with timeout
           if (peer.connection.signalingState !== 'stable') {
             console.warn(`[TOGGLE-VIDEO-ON] Waiting for stable state for ${peerId}, current: ${peer.connection.signalingState}`);
-            await new Promise<void>((resolve) => {
+            const timeout = 5000; // 5 seconds timeout
+            const startTime = Date.now();
+            
+            await new Promise<void>((resolve, reject) => {
               const checkStable = () => {
                 if (peer.connection.signalingState === 'stable') {
+                  console.log(`[TOGGLE-VIDEO-ON] ${peerId} is now stable`);
                   resolve();
+                } else if (Date.now() - startTime > timeout) {
+                  console.error(`[TOGGLE-VIDEO-ON] Timeout waiting for stable state for ${peerId}`);
+                  reject(new Error('Timeout waiting for stable state'));
                 } else {
                   setTimeout(checkStable, 100);
                 }
               };
               checkStable();
+            }).catch((err) => {
+              console.error(`[TOGGLE-VIDEO-ON] Error waiting for stable state for ${peerId}:`, err);
+              peer.isNegotiating = false;
+              return; // Skip this peer
             });
           }
           
