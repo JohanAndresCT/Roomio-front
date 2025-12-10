@@ -204,16 +204,8 @@ export function useVideoCall({
       setIsVideoEnabled(false);
       console.log('Local video stream stopped');
       
-      // Remove tracks from all peer connections
-      peersRef.current.forEach((peer, peerId) => {
-        const senders = peer.connection.getSenders();
-        senders.forEach(sender => {
-          if (sender.track && sender.track.kind === 'video') {
-            peer.connection.removeTrack(sender);
-            console.log(`Removed video track from peer ${peerId}`);
-          }
-        });
-      });
+      // DON'T remove tracks - just let toggleVideo replace them with black track
+      // Removing tracks causes signaling state issues
       
       // Notify peers about video state
       if (socketRef.current) {
@@ -230,99 +222,59 @@ export function useVideoCall({
    */
   const toggleVideo = useCallback(async () => {
     if (isVideoEnabled) {
+      // Turning OFF video - replace with black track (no renegotiation needed)
       stopVideo();
       
-      // Replace with black track in all peer connections
       const blackTrack = createBlackVideoTrack();
       blackVideoTrackRef.current = blackTrack;
       
-      // Use Promise.all to wait for all track replacements and renegotiations
+      // Simply replace tracks without renegotiation (more efficient)
       const replacePromises = Array.from(peersRef.current.entries()).map(async ([peerId, peer]) => {
-        // Wait for stable state
-        if (peer.connection.signalingState !== 'stable') {
-          console.log(`[TOGGLE-VIDEO] Waiting for stable state for ${peerId}`);
-          await new Promise(resolve => {
-            const checkStable = () => {
-              if (peer.connection.signalingState === 'stable') {
-                resolve(undefined);
-              } else {
-                setTimeout(checkStable, 50);
-              }
-            };
-            checkStable();
-          });
-        }
-        
         const senders = peer.connection.getSenders();
         const videoSender = senders.find(s => s.track?.kind === 'video');
         if (videoSender) {
           await videoSender.replaceTrack(blackTrack);
-          console.log(`[TOGGLE-VIDEO] Replaced with black track for peer ${peerId}`);
-          
-          // Force renegotiation to notify remote peer
-          try {
-            const offer = await peer.connection.createOffer();
-            await peer.connection.setLocalDescription(offer);
-            socketRef.current?.emit('video-offer', {
-              offer,
-              roomId: meetingId,
-              to: peerId
-            });
-            console.log(`[TOGGLE-VIDEO] Sent renegotiation offer to ${peerId}`);
-          } catch (err) {
-            console.error(`[TOGGLE-VIDEO] Renegotiation failed for ${peerId}:`, err);
-          }
-        } else {
-          console.warn(`[TOGGLE-VIDEO] No video sender found for peer ${peerId}`);
+          console.log(`[TOGGLE-VIDEO-OFF] Replaced with black track for peer ${peerId}`);
         }
       });
       
       await Promise.all(replacePromises);
+      
     } else {
+      // Turning ON video - replace with camera track and renegotiate
       const stream = await startVideo();
       if (stream) {
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
-          // Replace camera track in all connections and trigger renegotiation
           const replacePromises = Array.from(peersRef.current.entries()).map(async ([peerId, peer]) => {
-            // Wait for stable state
-            if (peer.connection.signalingState !== 'stable' || peer.isNegotiating) {
-              console.log(`[TOGGLE-VIDEO] Waiting for stable state for ${peerId}`);
-              await new Promise(resolve => {
-                const checkStable = () => {
-                  if (peer.connection.signalingState === 'stable' && !peer.isNegotiating) {
-                    resolve(undefined);
-                  } else {
-                    setTimeout(checkStable, 50);
-                  }
-                };
-                checkStable();
-              });
-            }
-            
             const senders = peer.connection.getSenders();
             const videoSender = senders.find(s => s.track?.kind === 'video');
+            
             if (videoSender) {
+              // Replace track
               await videoSender.replaceTrack(videoTrack);
-              console.log(`[TOGGLE-VIDEO] Replaced black track with camera for peer ${peerId}`);
+              console.log(`[TOGGLE-VIDEO-ON] Replaced black track with camera for peer ${peerId}`);
               
               // Force renegotiation to ensure remote peer receives new track
               try {
-                peer.isNegotiating = true;
-                const offer = await peer.connection.createOffer();
-                await peer.connection.setLocalDescription(offer);
-                socketRef.current?.emit('video-offer', {
-                  offer,
-                  roomId: meetingId,
-                  to: peerId
-                });
-                console.log(`[TOGGLE-VIDEO] Sent renegotiation offer to ${peerId} with camera track`);
+                // Only renegotiate if in stable state and not already negotiating
+                if (peer.connection.signalingState === 'stable' && !peer.isNegotiating) {
+                  peer.isNegotiating = true;
+                  const offer = await peer.connection.createOffer();
+                  await peer.connection.setLocalDescription(offer);
+                  socketRef.current?.emit('video-offer', {
+                    offer,
+                    roomId: meetingId,
+                    to: peerId
+                  });
+                  console.log(`[TOGGLE-VIDEO-ON] Sent renegotiation offer to ${peerId}`);
+                } else {
+                  console.warn(`[TOGGLE-VIDEO-ON] Skipping renegotiation for ${peerId}, signalingState: ${peer.connection.signalingState}, isNegotiating: ${peer.isNegotiating}`);
+                }
               } catch (err) {
-                console.error(`[TOGGLE-VIDEO] Renegotiation failed for ${peerId}:`, err);
+                console.error(`[TOGGLE-VIDEO-ON] Renegotiation failed for ${peerId}:`, err);
                 peer.isNegotiating = false;
               }
-            } else {
-              console.warn(`[TOGGLE-VIDEO] No video sender for peer ${peerId}`);
             }
           });
           
