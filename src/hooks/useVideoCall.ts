@@ -281,8 +281,8 @@ export function useVideoCall({
                 peer.isNegotiating = true;
                 const offer = await peer.connection.createOffer();
                 await peer.connection.setLocalDescription(offer);
-                socketRef.current?.emit('video-offer', {
-                  offer,
+                socketRef.current?.emit('video-renegotiate', {
+                  sdp: offer,
                   roomId: meetingId,
                   to: peerId
                 });
@@ -570,6 +570,58 @@ export function useVideoCall({
     socket.on('peer-toggle-video', ({ peerId, enabled }: { peerId: string; enabled: boolean }) => {
       console.log(`Peer ${peerId} toggled video:`, enabled);
       // Handle remote peer video toggle if needed
+    });
+
+    socket.on('video-renegotiate', async ({ sdp, from }: { sdp: RTCSessionDescriptionInit; from: string }) => {
+      console.log(`[RENEGOTIATE] Received renegotiation SDP from: ${from}, type: ${sdp.type}`);
+      try {
+        const peer = peersRef.current.get(from);
+        if (!peer) {
+          console.warn(`[RENEGOTIATE] No peer connection found for ${from}`);
+          return;
+        }
+
+        console.log(`[RENEGOTIATE] Current signaling state: ${peer.connection.signalingState}`);
+
+        // Handle based on SDP type
+        if (sdp.type === 'offer') {
+          // Received an offer - need to answer
+          await peer.connection.setRemoteDescription(new RTCSessionDescription(sdp));
+          console.log(`[RENEGOTIATE] Set remote offer from ${from}`);
+          
+          const answer = await peer.connection.createAnswer();
+          await peer.connection.setLocalDescription(answer);
+          console.log(`[RENEGOTIATE] Created and set answer for ${from}`);
+
+          socket.emit('video-renegotiate', {
+            sdp: answer,
+            roomId: meetingId,
+            to: from
+          });
+          console.log(`[RENEGOTIATE] Sent renegotiation answer to ${from}`);
+        } else if (sdp.type === 'answer') {
+          // Received an answer - just set it
+          if (peer.connection.signalingState === 'have-local-offer') {
+            await peer.connection.setRemoteDescription(new RTCSessionDescription(sdp));
+            console.log(`[RENEGOTIATE] Set remote answer from ${from}`);
+            
+            // Mark negotiation as complete
+            peer.isNegotiating = false;
+            peersRef.current.set(from, peer);
+          } else {
+            console.warn(`[RENEGOTIATE] Cannot set answer, wrong state: ${peer.connection.signalingState}`);
+          }
+        }
+      } catch (err) {
+        console.error('[RENEGOTIATE] Error handling renegotiation:', err);
+        
+        // Reset negotiating flag on error
+        const peer = peersRef.current.get(from);
+        if (peer) {
+          peer.isNegotiating = false;
+          peersRef.current.set(from, peer);
+        }
+      }
     });
 
     socket.on('peer-disconnected', ({ peerId }: { peerId: string }) => {
