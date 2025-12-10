@@ -271,7 +271,7 @@ export function useVideoCall({
         try {
           // Force rollback if in have-local-offer state (stuck offer)
           if (peer.connection.signalingState === 'have-local-offer') {
-            console.warn(`[TOGGLE-VIDEO-ON] Peer ${peerId} is stuck in have-local-offer, doing rollback`);
+            console.warn(`[TOGGLE-VIDEO-ON] Peer ${peerId} is stuck in have-local-offer, attempting rollback`);
             try {
               await peer.connection.setLocalDescription({ type: 'rollback' });
               console.log(`[TOGGLE-VIDEO-ON] Rollback successful for ${peerId}`);
@@ -279,14 +279,38 @@ export function useVideoCall({
               // Wait a bit for the state to stabilize
               await new Promise(resolve => setTimeout(resolve, 100));
             } catch (rollbackErr) {
-              console.error(`[TOGGLE-VIDEO-ON] Rollback failed for ${peerId}:`, rollbackErr);
-              continue; // Skip this peer
+              console.error(`[TOGGLE-VIDEO-ON] Rollback failed for ${peerId}, will recreate connection:`, rollbackErr);
+              
+              // Close the corrupted connection
+              peer.connection.close();
+              
+              // Create a new peer connection
+              console.log(`[TOGGLE-VIDEO-ON] Creating new peer connection for ${peerId}`);
+              const newPc = createPeerConnection(peerId);
+              peersRef.current.set(peerId, { connection: newPc, isNegotiating: false });
+              
+              // Add the video track to the new connection
+              newPc.addTrack(videoTrack, stream);
+              console.log(`[TOGGLE-VIDEO-ON] Added video track to new peer connection for ${peerId}`);
+              
+              // Create and send a new offer
+              const offer = await newPc.createOffer();
+              await newPc.setLocalDescription(offer);
+              
+              socketRef.current?.emit('video-offer', {
+                offer,
+                roomId: meetingId,
+                to: peerId
+              });
+              
+              console.log(`[TOGGLE-VIDEO-ON] Sent new offer to recreated peer ${peerId}`);
+              continue; // Move to next peer
             }
           }
           
           // Now check if stable
           if (peer.connection.signalingState !== 'stable') {
-            console.error(`[TOGGLE-VIDEO-ON] Peer ${peerId} still not stable after rollback: ${peer.connection.signalingState}`);
+            console.error(`[TOGGLE-VIDEO-ON] Peer ${peerId} still not stable: ${peer.connection.signalingState}`);
             continue; // Skip this peer
           }
           
