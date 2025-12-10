@@ -14,6 +14,7 @@ interface IceServerConfig {
 interface PeerConnection {
   connection: RTCPeerConnection;
   stream?: MediaStream;
+  isNegotiating?: boolean; // Track if negotiation is in progress
 }
 
 /**
@@ -218,51 +219,67 @@ export function useVideoCall({
       const blackTrack = createBlackVideoTrack();
       blackVideoTrackRef.current = blackTrack;
       
-      peersRef.current.forEach((peer, peerId) => {
+      // Use Promise.all to wait for all track replacements
+      const replacePromises = Array.from(peersRef.current.entries()).map(async ([peerId, peer]) => {
+        // Wait for stable state
+        if (peer.connection.signalingState !== 'stable') {
+          console.log(`[TOGGLE-VIDEO] Waiting for stable state for ${peerId}`);
+          await new Promise(resolve => {
+            const checkStable = () => {
+              if (peer.connection.signalingState === 'stable') {
+                resolve(undefined);
+              } else {
+                setTimeout(checkStable, 50);
+              }
+            };
+            checkStable();
+          });
+        }
+        
         const senders = peer.connection.getSenders();
         const videoSender = senders.find(s => s.track?.kind === 'video');
         if (videoSender) {
-          videoSender.replaceTrack(blackTrack);
-          console.log(`Replaced with black track for peer ${peerId}`);
+          await videoSender.replaceTrack(blackTrack);
+          console.log(`[TOGGLE-VIDEO] Replaced with black track for peer ${peerId}`);
         } else {
-          console.warn(`No video sender found for peer ${peerId}, adding black track`);
-          peer.connection.addTrack(blackTrack, new MediaStream([blackTrack]));
+          console.warn(`[TOGGLE-VIDEO] No video sender found for peer ${peerId}`);
         }
       });
+      
+      await Promise.all(replacePromises);
     } else {
       const stream = await startVideo();
       if (stream) {
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
-          // Replace or add camera track
-          peersRef.current.forEach((peer, peerId) => {
+          // Replace camera track in all connections
+          const replacePromises = Array.from(peersRef.current.entries()).map(async ([peerId, peer]) => {
+            // Wait for stable state
+            if (peer.connection.signalingState !== 'stable') {
+              console.log(`[TOGGLE-VIDEO] Waiting for stable state for ${peerId}`);
+              await new Promise(resolve => {
+                const checkStable = () => {
+                  if (peer.connection.signalingState === 'stable') {
+                    resolve(undefined);
+                  } else {
+                    setTimeout(checkStable, 50);
+                  }
+                };
+                checkStable();
+              });
+            }
+            
             const senders = peer.connection.getSenders();
             const videoSender = senders.find(s => s.track?.kind === 'video');
             if (videoSender) {
-              videoSender.replaceTrack(videoTrack);
-              console.log(`Replaced black track with camera for peer ${peerId}`);
+              await videoSender.replaceTrack(videoTrack);
+              console.log(`[TOGGLE-VIDEO] Replaced black track with camera for peer ${peerId}`);
             } else {
-              // No video sender exists, need to add track and renegotiate
-              console.warn(`No video sender for peer ${peerId}, adding camera track (will need renegotiation)`);
-              peer.connection.addTrack(videoTrack, stream);
-              
-              // Trigger renegotiation
-              if (peer.connection.signalingState === 'stable') {
-                peer.connection.createOffer().then(offer => {
-                  return peer.connection.setLocalDescription(offer);
-                }).then(() => {
-                  socketRef.current?.emit('video-offer', {
-                    offer: peer.connection.localDescription,
-                    roomId: meetingId,
-                    to: peerId
-                  });
-                  console.log(`Sent renegotiation offer to ${peerId}`);
-                }).catch(err => {
-                  console.error(`Renegotiation failed for ${peerId}:`, err);
-                });
-              }
+              console.warn(`[TOGGLE-VIDEO] No video sender for peer ${peerId}`);
             }
           });
+          
+          await Promise.all(replacePromises);
         }
         
         if (socketRef.current) {
@@ -289,10 +306,30 @@ export function useVideoCall({
       if (existingPeer) {
         console.log(`[OFFER] Reusing existing connection for ${peerId} (renegotiation)`);
         pc = existingPeer.connection;
+        
+        // Prevent simultaneous negotiations
+        if (existingPeer.isNegotiating) {
+          console.warn(`[OFFER] Already negotiating with ${peerId}, skipping`);
+          return;
+        }
+        
+        // Wait for stable state before renegotiating
+        if (pc.signalingState !== 'stable') {
+          console.warn(`[OFFER] Signaling state is ${pc.signalingState}, waiting for stable`);
+          // Wait a bit and retry
+          setTimeout(() => createOffer(peerId), 100);
+          return;
+        }
       } else {
         console.log(`[OFFER] Creating new peer connection for ${peerId}`);
         pc = createPeerConnection(peerId);
-        peersRef.current.set(peerId, { connection: pc });
+        peersRef.current.set(peerId, { connection: pc, isNegotiating: false });
+      }
+
+      // Mark as negotiating
+      if (existingPeer) {
+        existingPeer.isNegotiating = true;
+        peersRef.current.set(peerId, existingPeer);
       }
 
       const offer = await pc.createOffer({
@@ -389,10 +426,21 @@ export function useVideoCall({
         if (existingPeer) {
           console.log(`[ANSWER] Reusing existing connection for ${from} (renegotiation)`);
           pc = existingPeer.connection;
+          
+          // If we're already negotiating, wait for it to complete
+          if (existingPeer.isNegotiating) {
+            console.warn(`[ANSWER] Already negotiating, queuing offer from ${from}`);
+            // Queue the offer to be processed after current negotiation
+            setTimeout(() => {
+              socket.emit('video-offer', { offer, from });
+            }, 100);
+            return;
+          }
         } else {
           console.log(`[ANSWER] Creating new connection for ${from}`);
           pc = createPeerConnection(from);
-          peersRef.current.set(from, { connection: pc });
+          peersRef.current.set(from, { connection: pc, isNegotiating: false });
+          existingPeer = peersRef.current.get(from)!;
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
@@ -408,8 +456,22 @@ export function useVideoCall({
           to: from
         });
         console.log(`[ANSWER] Sent answer to ${from}`);
+        
+        // Mark negotiation complete after sending answer
+        if (existingPeer) {
+          existingPeer.isNegotiating = false;
+          peersRef.current.set(from, existingPeer);
+        }
       } catch (err) {
         console.error('Error handling offer:', err);
+        
+        // Reset negotiating flag on error
+        const peer = peersRef.current.get(from);
+        if (peer) {
+          peer.isNegotiating = false;
+          peersRef.current.set(from, peer);
+        }
+        
         setError('Failed to handle video offer');
       }
     });
@@ -426,8 +488,21 @@ export function useVideoCall({
           if (peer.connection.signalingState === 'have-local-offer') {
             await peer.connection.setRemoteDescription(new RTCSessionDescription(answer));
             console.log(`[COMPLETE] Set remote description from answer for ${from}`);
+            
+            // Mark negotiation as complete
+            peer.isNegotiating = false;
+            peersRef.current.set(from, peer);
+          } else if (peer.connection.signalingState === 'stable') {
+            // Already stable - this can happen in race conditions
+            // The connection is already established, just mark negotiation as complete
+            console.log(`[COMPLETE] Already in stable state, negotiation complete for ${from}`);
+            peer.isNegotiating = false;
+            peersRef.current.set(from, peer);
           } else {
-            console.warn(`[COMPLETE] Cannot set remote description, signaling state is: ${peer.connection.signalingState}`);
+            console.warn(`[COMPLETE] Unexpected signaling state: ${peer.connection.signalingState}`);
+            // Reset negotiating flag to allow retry
+            peer.isNegotiating = false;
+            peersRef.current.set(from, peer);
           }
         } else {
           console.warn(`[COMPLETE] No peer connection found for ${from}`);
@@ -435,6 +510,14 @@ export function useVideoCall({
       } catch (err: any) {
         console.error('Error handling answer:', err);
         console.error('Error details:', err.message, err.name);
+        
+        // Reset negotiating flag on error
+        const peer = peersRef.current.get(from);
+        if (peer) {
+          peer.isNegotiating = false;
+          peersRef.current.set(from, peer);
+        }
+        
         setError('Failed to handle video answer');
       }
     });
