@@ -455,7 +455,7 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   };
 
   return (
-    <div className="video-call-room">
+    <div className={`video-call-room ${isDarkMode ? 'dark-mode' : ''}`}>
       {/* Header */}
       <header className="video-call-header">
         <div className="flex items-center gap-1 sm:gap-2 min-w-0 flex-1">
@@ -655,10 +655,10 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               variant="secondary"
               size="icon"
               className="control-button"
-              onClick={() => setIsAccessibilityOpen(!isAccessibilityOpen)}
-              aria-label="Open accessibility"
-              aria-pressed={isAccessibilityOpen}
-              title="Accessibility"
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              aria-label="Toggle dark mode"
+              aria-pressed={isDarkMode}
+              title="Dark Mode"
             >
               <Contrast className="w-4 h-4 sm:w-5 sm:h-5" aria-hidden="true" />
             </Button>
