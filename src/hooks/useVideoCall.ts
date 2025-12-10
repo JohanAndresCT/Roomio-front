@@ -224,6 +224,9 @@ export function useVideoCall({
         if (videoSender) {
           videoSender.replaceTrack(blackTrack);
           console.log(`Replaced with black track for peer ${peerId}`);
+        } else {
+          console.warn(`No video sender found for peer ${peerId}, adding black track`);
+          peer.connection.addTrack(blackTrack, new MediaStream([blackTrack]));
         }
       });
     } else {
@@ -231,13 +234,33 @@ export function useVideoCall({
       if (stream) {
         const videoTrack = stream.getVideoTracks()[0];
         if (videoTrack) {
-          // Replace black track with real camera track
+          // Replace or add camera track
           peersRef.current.forEach((peer, peerId) => {
             const senders = peer.connection.getSenders();
             const videoSender = senders.find(s => s.track?.kind === 'video');
             if (videoSender) {
               videoSender.replaceTrack(videoTrack);
               console.log(`Replaced black track with camera for peer ${peerId}`);
+            } else {
+              // No video sender exists, need to add track and renegotiate
+              console.warn(`No video sender for peer ${peerId}, adding camera track (will need renegotiation)`);
+              peer.connection.addTrack(videoTrack, stream);
+              
+              // Trigger renegotiation
+              if (peer.connection.signalingState === 'stable') {
+                peer.connection.createOffer().then(offer => {
+                  return peer.connection.setLocalDescription(offer);
+                }).then(() => {
+                  socketRef.current?.emit('video-offer', {
+                    offer: peer.connection.localDescription,
+                    roomId: meetingId,
+                    to: peerId
+                  });
+                  console.log(`Sent renegotiation offer to ${peerId}`);
+                }).catch(err => {
+                  console.error(`Renegotiation failed for ${peerId}:`, err);
+                });
+              }
             }
           });
         }
