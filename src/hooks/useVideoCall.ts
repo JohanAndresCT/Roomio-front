@@ -625,6 +625,13 @@ export function useVideoCall({
 
         // Handle based on SDP type
         if (sdp.type === 'offer') {
+          // Handle glare condition: if we're also in have-local-offer state, do rollback
+          if (peer.connection.signalingState === 'have-local-offer') {
+            console.warn(`[RENEGOTIATE] Glare detected! Rolling back local offer from ${from}`);
+            await peer.connection.setLocalDescription({ type: 'rollback' });
+            console.log(`[RENEGOTIATE] Rollback complete, now accepting remote offer`);
+          }
+          
           // Received an offer - need to answer
           await peer.connection.setRemoteDescription(new RTCSessionDescription(sdp));
           console.log(`[RENEGOTIATE] Set remote offer from ${from}`);
@@ -639,6 +646,10 @@ export function useVideoCall({
             to: from
           });
           console.log(`[RENEGOTIATE] Sent renegotiation answer to ${from}`);
+          
+          // Mark negotiation as complete
+          peer.isNegotiating = false;
+          peersRef.current.set(from, peer);
         } else if (sdp.type === 'answer') {
           // Received an answer - just set it
           if (peer.connection.signalingState === 'have-local-offer') {
