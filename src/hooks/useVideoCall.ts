@@ -297,6 +297,12 @@ export function useVideoCall({
     if (!enabled) return;
 
     console.log('Initializing video call for meeting:', meetingId);
+    
+    // Create black video track at initialization
+    if (!blackVideoTrackRef.current) {
+      blackVideoTrackRef.current = createBlackVideoTrack();
+      console.log('Created initial black video track');
+    }
 
     const socket = io(serverUrl, {
       transports: ['websocket'],
