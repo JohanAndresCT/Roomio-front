@@ -269,30 +269,25 @@ export function useVideoCall({
       // For each peer connection, remove old track and add new one, then renegotiate
       for (const [peerId, peer] of peersRef.current.entries()) {
         try {
-          // Wait for stable state with timeout
+          // Force rollback if in have-local-offer state (stuck offer)
+          if (peer.connection.signalingState === 'have-local-offer') {
+            console.warn(`[TOGGLE-VIDEO-ON] Peer ${peerId} is stuck in have-local-offer, doing rollback`);
+            try {
+              await peer.connection.setLocalDescription({ type: 'rollback' });
+              console.log(`[TOGGLE-VIDEO-ON] Rollback successful for ${peerId}`);
+              
+              // Wait a bit for the state to stabilize
+              await new Promise(resolve => setTimeout(resolve, 100));
+            } catch (rollbackErr) {
+              console.error(`[TOGGLE-VIDEO-ON] Rollback failed for ${peerId}:`, rollbackErr);
+              continue; // Skip this peer
+            }
+          }
+          
+          // Now check if stable
           if (peer.connection.signalingState !== 'stable') {
-            console.warn(`[TOGGLE-VIDEO-ON] Waiting for stable state for ${peerId}, current: ${peer.connection.signalingState}`);
-            const timeout = 5000; // 5 seconds timeout
-            const startTime = Date.now();
-            
-            await new Promise<void>((resolve, reject) => {
-              const checkStable = () => {
-                if (peer.connection.signalingState === 'stable') {
-                  console.log(`[TOGGLE-VIDEO-ON] ${peerId} is now stable`);
-                  resolve();
-                } else if (Date.now() - startTime > timeout) {
-                  console.error(`[TOGGLE-VIDEO-ON] Timeout waiting for stable state for ${peerId}`);
-                  reject(new Error('Timeout waiting for stable state'));
-                } else {
-                  setTimeout(checkStable, 100);
-                }
-              };
-              checkStable();
-            }).catch((err) => {
-              console.error(`[TOGGLE-VIDEO-ON] Error waiting for stable state for ${peerId}:`, err);
-              peer.isNegotiating = false;
-              return; // Skip this peer
-            });
+            console.error(`[TOGGLE-VIDEO-ON] Peer ${peerId} still not stable after rollback: ${peer.connection.signalingState}`);
+            continue; // Skip this peer
           }
           
           // Skip if already negotiating
