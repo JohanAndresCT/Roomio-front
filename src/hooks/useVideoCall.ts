@@ -326,18 +326,18 @@ export function useVideoCall({
           
           peer.isNegotiating = true;
           
-          // Remove old video sender and add new one
+          // Use replaceTrack instead of removeTrack + addTrack to maintain m-line order
           const senders = peer.connection.getSenders();
-          const oldVideoSender = senders.find(s => s.track?.kind === 'video');
+          const videoSender = senders.find(s => s.track?.kind === 'video');
           
-          if (oldVideoSender) {
-            peer.connection.removeTrack(oldVideoSender);
-            console.log(`[TOGGLE-VIDEO-ON] Removed old video track from peer ${peerId}`);
+          if (videoSender) {
+            await videoSender.replaceTrack(videoTrack);
+            console.log(`[TOGGLE-VIDEO-ON] Replaced track with real video for peer ${peerId}`);
+          } else {
+            // Fallback: if no sender exists, add the track
+            peer.connection.addTrack(videoTrack, stream);
+            console.log(`[TOGGLE-VIDEO-ON] Added new video track to peer ${peerId}`);
           }
-          
-          // Add the new video track
-          peer.connection.addTrack(videoTrack, stream);
-          console.log(`[TOGGLE-VIDEO-ON] Added new video track to peer ${peerId}`);
           
           // Create and send offer
           const offer = await peer.connection.createOffer();
