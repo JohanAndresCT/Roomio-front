@@ -444,6 +444,16 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
               ? videoLocalStream 
               : videoRemoteStreams.get(participant.id);
             
+            // Debug: Log video stream lookup
+            if (!isCurrentUser) {
+              console.log(`🔍 Looking for video stream for ${participant.name}:`, {
+                participantId: participant.id,
+                hasStream: !!videoStream,
+                remoteStreamsKeys: Array.from(videoRemoteStreams.keys()),
+                remoteStreamsSize: videoRemoteStreams.size
+              });
+            }
+            
             return (
             <div
               key={participant.id}
