@@ -93,12 +93,6 @@ const VideoCallRoom = ({ onNavigate }: VideoCallRoomProps) => {
   });
 
   // Hook to manage WebRTC video connection
-  console.log('🎬 Initializing useVideoCall hook with:', { 
-    meetingId, 
-    userId: user?.uid, 
-    enabled: true 
-  });
-  
   const { 
     localStream: videoLocalStream, 
     remoteStreams: videoRemoteStreams, 
