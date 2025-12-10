@@ -49,6 +49,23 @@ export function useVideoCall({
   const peersRef = useRef<Map<string, PeerConnection>>(new Map());
   const localStreamRef = useRef<MediaStream | null>(null);
   const iceConfigRef = useRef<IceServerConfig | null>(null);
+  const blackVideoTrackRef = useRef<MediaStreamTrack | null>(null);
+
+  /**
+   * Creates a black video track (placeholder)
+   */
+  const createBlackVideoTrack = useCallback(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.fillStyle = 'black';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }
+    const stream = canvas.captureStream();
+    return stream.getVideoTracks()[0];
+  }, []);
 
   /**
    * Creates a new RTCPeerConnection with ICE servers
@@ -65,15 +82,19 @@ export function useVideoCall({
 
     console.log(`[PC-${peerId}] Creating peer connection`);
 
-    // Add local stream tracks if available
-    if (localStreamRef.current) {
-      console.log(`[PC-${peerId}] Adding ${localStreamRef.current.getTracks().length} local tracks`);
-      localStreamRef.current.getTracks().forEach(track => {
-        console.log(`[PC-${peerId}] Adding track: ${track.kind} (${track.label})`);
-        pc.addTrack(track, localStreamRef.current!);
-      });
+    // ALWAYS add a video track (black placeholder if camera is off)
+    const videoTrack = localStreamRef.current?.getVideoTracks()[0] || blackVideoTrackRef.current;
+    if (videoTrack) {
+      const stream = new MediaStream([videoTrack]);
+      console.log(`[PC-${peerId}] Adding video track: ${videoTrack.label}`);
+      pc.addTrack(videoTrack, stream);
     } else {
-      console.log(`[PC-${peerId}] No local stream available yet`);
+      // Create black track if we don't have one yet
+      const blackTrack = createBlackVideoTrack();
+      blackVideoTrackRef.current = blackTrack;
+      const stream = new MediaStream([blackTrack]);
+      console.log(`[PC-${peerId}] Adding black placeholder track`);
+      pc.addTrack(blackTrack, stream);
     }
 
     // Handle incoming tracks
@@ -191,49 +212,44 @@ export function useVideoCall({
   const toggleVideo = useCallback(async () => {
     if (isVideoEnabled) {
       stopVideo();
+      
+      // Replace with black track in all peer connections
+      const blackTrack = createBlackVideoTrack();
+      blackVideoTrackRef.current = blackTrack;
+      
+      peersRef.current.forEach((peer, peerId) => {
+        const senders = peer.connection.getSenders();
+        const videoSender = senders.find(s => s.track?.kind === 'video');
+        if (videoSender) {
+          videoSender.replaceTrack(blackTrack);
+          console.log(`Replaced with black track for peer ${peerId}`);
+        }
+      });
     } else {
       const stream = await startVideo();
-      if (stream && socketRef.current) {
-        console.log('Video started, adding tracks to existing peers');
-        
-        // Add new video tracks to all existing peer connection
-        peersRef.current.forEach(async (peer, peerId) => {
-          stream.getTracks().forEach(track => {
-            // Check if this track is already being sent
+      if (stream) {
+        const videoTrack = stream.getVideoTracks()[0];
+        if (videoTrack) {
+          // Replace black track with real camera track
+          peersRef.current.forEach((peer, peerId) => {
             const senders = peer.connection.getSenders();
-            const existingSender = senders.find(s => s.track?.id === track.id);
-            
-            if (!existingSender) {
-              console.log(`Adding ${track.kind} track to existing peer ${peerId}`);
-              peer.connection.addTrack(track, stream);
-            } else {
-              console.log(`Track ${track.kind} already exists for peer ${peerId}, skipping`);
+            const videoSender = senders.find(s => s.track?.kind === 'video');
+            if (videoSender) {
+              videoSender.replaceTrack(videoTrack);
+              console.log(`Replaced black track with camera for peer ${peerId}`);
             }
           });
-          
-          // Renegotiate the connection
-          try {
-            const offer = await peer.connection.createOffer();
-            await peer.connection.setLocalDescription(offer);
-            
-            socketRef.current?.emit('video-offer', {
-              offer,
-              roomId: meetingId,
-              to: peerId
-            });
-            console.log(`Renegotiated connection with ${peerId} after video toggle`);
-          } catch (err) {
-            console.error(`Failed to renegotiate with ${peerId}:`, err);
-          }
-        });
+        }
         
-        socketRef.current.emit('toggle-video', { 
-          roomId: meetingId, 
-          enabled: true 
-        });
+        if (socketRef.current) {
+          socketRef.current.emit('toggle-video', { 
+            roomId: meetingId, 
+            enabled: true 
+          });
+        }
       }
     }
-  }, [isVideoEnabled, startVideo, stopVideo, meetingId]);
+  }, [isVideoEnabled, startVideo, stopVideo, meetingId, createBlackVideoTrack]);
 
   /**
    * Creates an offer for a peer
@@ -347,18 +363,6 @@ export function useVideoCall({
           console.log(`[ANSWER] Creating new connection for ${from}`);
           pc = createPeerConnection(from);
           peersRef.current.set(from, { connection: pc });
-        }
-
-        // IMPORTANT: Add our local tracks if we have them (for renegotiation)
-        if (localStreamRef.current) {
-          const existingSenders = pc.getSenders();
-          localStreamRef.current.getTracks().forEach(track => {
-            const existingSender = existingSenders.find(s => s.track?.id === track.id);
-            if (!existingSender) {
-              console.log(`[ANSWER] Adding our ${track.kind} track to connection with ${from}`);
-              pc.addTrack(track, localStreamRef.current!);
-            }
-          });
         }
 
         await pc.setRemoteDescription(new RTCSessionDescription(offer));
