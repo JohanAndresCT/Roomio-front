@@ -563,15 +563,20 @@ export function useVideoCall({
     // Handle existing users in the room
     // Handle user mapping event (socketId -> userId)
     socket.on('user-mapping', ({ socketId, userId: mappedUserId }: { socketId: string; userId: string }) => {
-      console.log('[VIDEO-MAPPING] Received user mapping:', { socketId, userId: mappedUserId });
+      console.log('🗺️ [VIDEO-MAPPING] Received user mapping from VIDEO SERVER:', { 
+        socketId, 
+        userId: mappedUserId 
+      });
       setSocketToUserMap(prev => {
         const newMap = new Map(prev);
         newMap.set(socketId, mappedUserId);
+        console.log('🗺️ [VIDEO-MAPPING] Updated socketToUserMap:', Object.fromEntries(newMap));
         return newMap;
       });
       setUserToSocketMap(prev => {
         const newMap = new Map(prev);
         newMap.set(mappedUserId, socketId);
+        console.log('🗺️ [VIDEO-MAPPING] Updated userToSocketMap:', Object.fromEntries(newMap));
         return newMap;
       });
     });
@@ -840,15 +845,17 @@ export function useVideoCall({
    * Add a mapping between a user ID and their video socket ID
    */
   const addUserMapping = useCallback((userId: string, socketId: string) => {
-    console.log('[VIDEO-MAPPING] Adding mapping:', { userId, socketId });
+    console.log('🗺️ [ADD-USER-MAPPING] Adding mapping from external call (CHAT):', { userId, socketId });
     setSocketToUserMap(prev => {
       const newMap = new Map(prev);
       newMap.set(socketId, userId);
+      console.log('🗺️ [ADD-USER-MAPPING] Updated socketToUserMap:', Object.fromEntries(newMap));
       return newMap;
     });
     setUserToSocketMap(prev => {
       const newMap = new Map(prev);
       newMap.set(userId, socketId);
+      console.log('🗺️ [ADD-USER-MAPPING] Updated userToSocketMap:', Object.fromEntries(newMap));
       return newMap;
     });
   }, []);
